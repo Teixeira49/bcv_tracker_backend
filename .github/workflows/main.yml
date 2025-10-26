@@ -1,0 +1,16 @@
+name: Scheduled Scrape
+
+on:
+  schedule:
+    # Ejecuta a 12:00 UTC y 16:00 UTC diariamente — convierte a tu zona si es necesario
+    - cron: '0 12 * * *'
+    - cron: '0 16 * * *'
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scrape endpoint
+        run: |
+          curl -X POST -H "${{ secrets.SCRAPE_URL }}"
+        # curl -X POST -H "X-SCRAPE-TOKEN: ${{ secrets.SCRAPE_TOKEN }}" "${{ secrets.SCRAPE_URL }}"
