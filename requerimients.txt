@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+certifi
+requests
+beautifulsoup4
+python-dotenv
+alembic
+gunicorn
+typing-extensions
