@@ -1,5 +1,7 @@
 fastapi
 uvicorn[standard]
+pydantic
+sqlite3
 sqlalchemy
 certifi
 requests
