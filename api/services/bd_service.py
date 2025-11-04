@@ -4,9 +4,9 @@ import os
 from typing import List
 from datetime import datetime
 
-from models.bd_currency import Base, Currency
-from utils.constants import Constants
-from models.bcv_currency import BcvCurrency
+from ..models.bd_currency import Base, Currency
+from ..utils.constants import Constants
+from ..models.bcv_currency import BcvCurrency
 
 # Asegura directorio
 os.makedirs(Constants.DB_DIR, exist_ok=True)
