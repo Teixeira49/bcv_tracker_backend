@@ -3,7 +3,7 @@ import traceback
 
 try:
     # intenta importar tu router normalmente
-    from controller.dollar_controller import router as controller_app
+    from .controller.dollar_controller import router as controller_app
 
     app = FastAPI(title="DolarTracker")
     app.include_router(controller_app)
