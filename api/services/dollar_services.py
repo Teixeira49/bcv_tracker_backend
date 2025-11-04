@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from ..models.bcv_currency import BcvCurrency
 from ..models.bd_currency import Base, Currency
-from bd_service import save_currencies_to_db
+from ..services.bd_service import save_currencies_to_db
 from ..utils.constants import Constants
 
 class DollarService:
