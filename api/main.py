@@ -1,5 +1,10 @@
 from fastapi import FastAPI
 import traceback
+from dotenv import load_dotenv
+
+# Carga las variables de entorno desde el archivo .env
+# Esto debe hacerse ANTES de que se importe cualquier otro módulo que las necesite.
+load_dotenv()
 
 try:
     # intenta importar tu router normalmente

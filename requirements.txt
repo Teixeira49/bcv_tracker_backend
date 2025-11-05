@@ -10,3 +10,4 @@ alembic
 gunicorn
 typing-extensions
 psycopg2-binary
+dotenv
