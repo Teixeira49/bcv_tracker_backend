@@ -5,10 +5,10 @@ import certifi
 from datetime import datetime
 from typing import List, Optional
 
-from ..models.bcv_currency import BcvCurrency
-from ..models.bd_currency import Base, Currency
-from ..services.bd_service import save_currencies_to_db, SessionLocal
-from ..utils.constants import Constants
+from api.models.bcv_currency import BcvCurrency
+from api.models.bd_currency import Base, Currency
+from api.services.bd_service import save_currencies_to_db, SessionLocal
+from api.utils.constants import Constants
 
 class DollarService:
     def getDollarValueByBCV():
