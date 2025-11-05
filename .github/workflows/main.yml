@@ -4,13 +4,29 @@ on:
   schedule:
     # Ejecuta a 12:00 UTC y 16:00 UTC diariamente — convierte a tu zona si es necesario
     - cron: '0 12 * * *'
-    - cron: '0 16 * * *'
-
+    - cron: '0 20 * * *'
+    
+env:
+  BASE_URL: ${{ secrets.BACKEND_BASE_URL }} # Obtiene el valor del Secret de GitHub
+  
 jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger scrape endpoint
         run: |
-          curl -X POST -H "${{ secrets.SCRAPE_URL }}"
-        # curl -X POST -H "X-SCRAPE-TOKEN: ${{ secrets.SCRAPE_TOKEN }}" "${{ secrets.SCRAPE_URL }}"
+          URL_ENDPOINT="$BASE_URL/api/update-latest-exchange-rate"
+
+          echo "Ejecutando solicitud PUT a: $URL_ENDPOINT"
+          
+          HTTP_CODE=$(curl -X PUT -s -S -o /dev/null -w "%{http_code}" "$URL_ENDPOINT")
+
+          echo "Código de estado HTTP recibido: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Solicitud PUT completada exitosamente (Código $HTTP_CODE)."
+          else
+            # Falla el job si el código de estado no es 2xx
+            echo "❌ ERROR: La solicitud PUT falló. Código de estado: $HTTP_CODE"
+            exit 1
+          fi
