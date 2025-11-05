@@ -8,12 +8,14 @@ from ..models.bd_currency import Base, Currency
 from ..utils.constants import Constants
 from ..models.bcv_currency import BcvCurrency
 
-# Asegura directorio
-os.makedirs(Constants.DB_DIR, exist_ok=True)
+# Lee la URL de la base de datos desde las variables de entorno.
+# El archivo .env que mostraste contiene esta variable. Vercel la inyectará automáticamente.
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# SQLite engine
-DATABASE_URL = f"sqlite:///{Constants.DB_FILE}"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+if not DATABASE_URL:
+    raise ValueError("No DATABASE_URL environment variable set")
+
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():

@@ -1,6 +1,5 @@
 from bs4 import BeautifulSoup
 import requests
-import sqlite3
 import os
 import certifi
 from datetime import datetime
@@ -8,7 +7,7 @@ from typing import List, Optional
 
 from ..models.bcv_currency import BcvCurrency
 from ..models.bd_currency import Base, Currency
-from ..services.bd_service import save_currencies_to_db
+from ..services.bd_service import save_currencies_to_db, SessionLocal
 from ..utils.constants import Constants
 
 class DollarService:
@@ -47,46 +46,33 @@ class DollarService:
             return []
         
     async def getSavedCurrencies(today_data: Optional[bool] = None):
+        session = SessionLocal()
         try:
-            db_path = Constants.DB_FILE
-            if not db_path or not os.path.isfile(db_path):
-                # BD no encontrada -> devolver lista vacía o error 404 según prefieras
-                return []
-            conn = sqlite3.connect(db_path)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+            query = session.query(Currency)
+
             if today_data is None:
-                cur.execute("""
-                    SELECT id, code, name, linkImage, exchangeRate, createDate, updateDate, todayData
-                    FROM currencies
-                    ORDER BY id DESC
-                """)
+                rows = query.order_by(Currency.id.desc()).all()
             else:
-                # SQLite stores booleans as 0/1
-                cur.execute("""
-                    SELECT id, code, name, linkImage, exchangeRate, createDate, updateDate, todayData
-                    FROM currencies
-                    WHERE todayData = ?
-                    ORDER BY id DESC
-                """, (1 if today_data else 0,))
-            rows = cur.fetchall()
+                rows = query.filter(Currency.todayData == today_data).order_by(Currency.id.desc()).all()
+
             result = []
             for r in rows:
                 result.append({
-                    "id": r["id"],
-                    "code": r["code"],
-                    "name": r["name"],
-                    "linkImage": r["linkImage"],
-                    "exchangeRate": r["exchangeRate"],
-                    "createDate": r["createDate"],
-                    "updateDate": r["updateDate"],
-                    "todayData": bool(r["todayData"])
+                    "id": r.id,
+                    "code": r.code,
+                    "name": r.name,
+                    "linkImage": r.linkImage,
+                    "exchangeRate": r.exchangeRate,
+                    "createDate": r.createDate.isoformat() if r.createDate else None,
+                    "updateDate": r.updateDate.isoformat() if r.updateDate else None,
+                    "todayData": r.todayData
                 })
-            conn.close()
             return result
         except Exception as e:
             print(f"An error occurred while fetching saved currencies: {e}")
             return []
+        finally:
+            session.close()
         
     def validateDate(date_str: str) -> bool:
         try:
