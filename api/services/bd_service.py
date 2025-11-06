@@ -2,11 +2,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import os
 from typing import List
-from datetime import datetime
 
 from ..models.bd_currency import Base, Currency
-from ..utils.constants import Constants
-from ..models.bcv_currency import BcvCurrency
+from api.utils.constants import Helper
 
 # Lee la URL de la base de datos desde las variables de entorno.
 # El archivo .env que mostraste contiene esta variable. Vercel la inyectará automáticamente.
@@ -27,7 +25,7 @@ def save_currencies_to_db(currencies: List[Currency]):
     init_db()
     session = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = Helper.getZoneTime()
         for cur in currencies:
             # Intenta obtener el registro existente con el mismo código y valor de todayData
             existing_row = session.query(Currency).filter(

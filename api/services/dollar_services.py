@@ -1,21 +1,16 @@
 from bs4 import BeautifulSoup
 import requests
-import os
-import certifi
 from datetime import datetime
-from typing import List, Optional
-from zoneinfo import ZoneInfo
+from typing import Optional
 
-from api.models.bcv_currency import BcvCurrency
-from api.models.bd_currency import Base, Currency
+from api.models.bd_currency import Currency
 from api.services.bd_service import save_currencies_to_db, SessionLocal
-from api.utils.constants import Constants
+from api.utils.constants import Constants, Helper
+
 
 class DollarService:
     def __init__(self):
         pass
-
-    CARACAS_TZ = ZoneInfo('America/Caracas')
 
     def getDollarValueByBCV():
         url = requests.get("https://www.bcv.org.ve/", verify=False)
@@ -83,7 +78,7 @@ class DollarService:
     def validateDate(self, date_str: str) -> bool:
         try:
             date_from_bcv = datetime.fromisoformat(date_str).date()
-            return date_from_bcv == self.getZoneTime().date()
+            return date_from_bcv == Helper.getZoneTime().date()
         except ValueError:
             print("Invalid date format")
             return False
