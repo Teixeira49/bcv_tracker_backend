@@ -5,7 +5,8 @@ from typing import Optional
 
 from api.models.bd_currency import Currency
 from api.services.bd_service import save_currencies_to_db, SessionLocal
-from api.utils.constants import Constants, Helper
+from api.utils.constants import Constants
+from api.utils.helper import Helper
 
 
 class DollarService:
