@@ -2,9 +2,9 @@ name: Scheduled Scrape
 
 on:
   schedule:
-    # Ejecuta a 12:00 UTC y 16:00 UTC diariamente — convierte a tu zona si es necesario
-    - cron: '0 12 * * *'
-    - cron: '0 20 * * *'
+    # Ejecuta a 10:00 UTC y 19:00 UTC diariamente — convierte a tu zona si es necesario
+    - cron: '0 10 * * *'
+    - cron: '0 19 * * *'
     
 env:
   BASE_URL: ${{ secrets.BACKEND_BASE_URL }} # Obtiene el valor del Secret de GitHub
