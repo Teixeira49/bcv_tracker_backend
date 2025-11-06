@@ -17,10 +17,11 @@ except Exception as e:
     # Si falla la importación, exponemos un app mínimo que muestre la traza para debugging
     tb = traceback.format_exc()
     app = FastAPI(title="DolarTracker - Import Error")
+    exception = Exception.with_traceback
 
     @app.get("/")
     async def root():
-        return {"error": "import_failed", "message": str(e)}
+        return {"error": "import_failed", "message": str(exception)}
 
     @app.get("/__import_error")
     async def import_error():
