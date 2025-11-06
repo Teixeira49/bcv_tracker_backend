@@ -32,7 +32,7 @@ class DollarService:
             if url.status_code == 200:
                 soup = BeautifulSoup(url.content, "html.parser")
                 date = soup.findAll(class_='date-display-single')
-                checkDate = self.validateDate(date[0].attrs.get('content')) if date else False
+                checkDate = self.validateDate(date[0].attrs.get('content'))
                 print(checkDate)
                 print(self.getZoneTime())
                 print(date[0].attrs.get('content'))
