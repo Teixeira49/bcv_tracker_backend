@@ -85,11 +85,13 @@ class DollarService:
         
     def validateDate(self, date_str: str) -> bool:
         try:
+            print(f"date_str {date_str}")
             date_obj = datetime.strptime(date_str, "%Y-%m-%d")
             print(f"Im loading date_obj.date() {date_obj.date()} == self.getZoneTime().strftime(Y-m-d).date() {self.getZoneTime().strftime("%Y-%m-%d").date()}")
             print(date_obj.date() == self.getZoneTime().strftime("%Y-%m-%d").date())
             return date_obj.date() == self.getZoneTime().strftime("%Y-%m-%d").date()
         except ValueError:
+            print("Invalid date format")
             return False
 
     def getZoneTime(self):
