@@ -29,48 +29,32 @@ def save_currencies_to_db(currencies: List[Currency]):
     try:
         now = datetime.utcnow()
         for cur in currencies:
-            # obtener todos los registros con ese código
-            rows = session.query(Currency).filter(Currency.code == cur.code).all()
-
-            row_true = next((r for r in rows if r.todayData), None)
-            row_false = next((r for r in rows if not r.todayData), None)
+            # Intenta obtener el registro existente con el mismo código y valor de todayData
+            existing_row = session.query(Currency).filter(
+                Currency.code == cur.code,
+                Currency.todayData == cur.todayData
+            ).first()
 
             # actualizar o crear el registro "todayData == True"
-            if row_true:
-                row_true.name = cur.name
-                row_true.linkImage = cur.linkImage
-                row_true.exchangeRate = cur.exchangeRate
-                row_true.updateDate = now
-                row_true.todayData = True
+            if existing_row:
+                # Si existe un registro con el mismo código y todayData, actualízalo
+                existing_row.name = cur.name
+                existing_row.linkImage = cur.linkImage
+                existing_row.exchangeRate = cur.exchangeRate
+                existing_row.updateDate = now
             # actualizar o crear el registro "todayData == False"
-            if row_false:
-                row_false.name = cur.name
-                row_false.linkImage = cur.linkImage
-                row_false.exchangeRate = cur.exchangeRate
-                row_false.updateDate = now
-                row_false.todayData = False
-                
-            if not row_true and not row_false:
-                new_true = Currency(
+            else:
+                # Si no existe un registro con el mismo código y todayData, crea uno nuevo
+                new_currency = Currency(
                     code=cur.code,
                     name=cur.name,
                     linkImage=cur.linkImage,
                     exchangeRate=cur.exchangeRate,
                     createDate=now,
                     updateDate=now,
-                    todayData=True
+                    todayData=cur.todayData
                 )
-                new_false = Currency(
-                    code=cur.code,
-                    name=cur.name,
-                    linkImage=cur.linkImage,
-                    exchangeRate=cur.exchangeRate,
-                    createDate=now,
-                    updateDate=now,
-                    todayData=False
-                )
-                session.add(new_false)
-                session.add(new_true)
+                session.add(new_currency)
 
         session.commit()
     except Exception:
