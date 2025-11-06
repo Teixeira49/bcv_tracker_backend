@@ -4,7 +4,7 @@ on:
   schedule:
     # Ejecuta a 10:00 UTC y 19:15 UTC diariamente — Solo Lunes a Viernes
     - cron: '0 10 * * 1-5'
-    - cron: '15 19 * * 1-5'
+    - cron: '15 21 * * 1-5'
     
 env:
   BASE_URL: ${{ secrets.BACKEND_BASE_URL }} # Obtiene el valor del Secret de GitHub
