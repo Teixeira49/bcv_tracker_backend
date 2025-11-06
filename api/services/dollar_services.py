@@ -84,17 +84,14 @@ class DollarService:
             print("Invalid date format")
             return False
 
-    def getZoneTime(self):
-        return datetime.now(self.CARACAS_TZ)
-
     def createBCVCurrency(self, code, name, linkImage, exchangeRate, today) -> Currency:
         return Currency(
             code=str(code.text.strip().replace(' ', '')) if code else '',
             name=str(name.strip()).capitalize() if name else '',
             linkImage=Constants.BCV_URL.replace('ve/', 've') + str(linkImage.attrs.get('src')) if linkImage else '',
             exchangeRate=float(exchangeRate.text.replace(',', '.')) if exchangeRate else 0.0,
-            createDate=self.getZoneTime(),
-            updateDate=self.getZoneTime(),
+            createDate=Helper().getZoneTime(),
+            updateDate=Helper().getZoneTime(),
             todayData=today
         )
     
