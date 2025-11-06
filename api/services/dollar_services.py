@@ -33,9 +33,6 @@ class DollarService:
                 soup = BeautifulSoup(url.content, "html.parser")
                 date = soup.findAll(class_='date-display-single')
                 checkDate = self.validateDate(date[0].attrs.get('content'))
-                print(checkDate)
-                print(self.getZoneTime())
-                print(date[0].attrs.get('content'))
                 currencies = soup.findAll(class_="col-sm-12 col-xs-12")
                 for item in currencies: 
                     getImage, getCode, getCurrency, getName  = item.find(class_='icono_bss_blanco1'), item.find('span'), item.find('strong'), item.attrs.get('id')
