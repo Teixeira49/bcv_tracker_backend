@@ -12,6 +12,9 @@ from api.services.bd_service import save_currencies_to_db, SessionLocal
 from api.utils.constants import Constants
 
 class DollarService:
+    def __init__(self):
+        pass
+    
     CARACAS_TZ = ZoneInfo('America/Caracas')
 
     def getDollarValueByBCV():
