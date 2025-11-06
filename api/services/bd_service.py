@@ -25,7 +25,7 @@ def save_currencies_to_db(currencies: List[Currency]):
     init_db()
     session = SessionLocal()
     try:
-        now = Helper.getZoneTime()
+        now = Helper().getZoneTime()
         for cur in currencies:
             # Intenta obtener el registro existente con el mismo código y valor de todayData
             existing_row = session.query(Currency).filter(

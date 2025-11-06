@@ -79,7 +79,7 @@ class DollarService:
     def validateDate(self, date_str: str) -> bool:
         try:
             date_from_bcv = datetime.fromisoformat(date_str).date()
-            return date_from_bcv == Helper.getZoneTime().date()
+            return date_from_bcv == Helper().getZoneTime().date()
         except ValueError:
             print("Invalid date format")
             return False
