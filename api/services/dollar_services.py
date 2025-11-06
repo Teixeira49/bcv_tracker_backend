@@ -97,8 +97,8 @@ class DollarService:
             name=str(name.strip()).capitalize() if name else '',
             linkImage=Constants.BCV_URL.replace('ve/', 've') + str(linkImage.attrs.get('src')) if linkImage else '',
             exchangeRate=float(exchangeRate.text.replace(',', '.')) if exchangeRate else 0.0,
-            createDate=datetime.utcnow(),
-            updateDate=datetime.utcnow(),
+            createDate=self.getZoneTime(),
+            updateDate=self.getZoneTime(),
             todayData=today
         )
     
