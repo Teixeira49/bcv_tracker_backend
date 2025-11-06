@@ -42,7 +42,15 @@ def save_currencies_to_db(currencies: List[Currency]):
                 row_true.exchangeRate = cur.exchangeRate
                 row_true.updateDate = now
                 row_true.todayData = True
-            else:
+            # actualizar o crear el registro "todayData == False"
+            if row_false:
+                row_false.name = cur.name
+                row_false.linkImage = cur.linkImage
+                row_false.exchangeRate = cur.exchangeRate
+                row_false.updateDate = now
+                row_false.todayData = False
+                
+            if not row_true and not row_false:
                 new_true = Currency(
                     code=cur.code,
                     name=cur.name,
@@ -52,16 +60,6 @@ def save_currencies_to_db(currencies: List[Currency]):
                     updateDate=now,
                     todayData=True
                 )
-                session.add(new_true)
-
-            # actualizar o crear el registro "todayData == False"
-            if row_false:
-                row_false.name = cur.name
-                row_false.linkImage = cur.linkImage
-                row_false.exchangeRate = cur.exchangeRate
-                row_false.updateDate = now
-                row_false.todayData = False
-            else:
                 new_false = Currency(
                     code=cur.code,
                     name=cur.name,
@@ -72,6 +70,7 @@ def save_currencies_to_db(currencies: List[Currency]):
                     todayData=False
                 )
                 session.add(new_false)
+                session.add(new_true)
 
         session.commit()
     except Exception:

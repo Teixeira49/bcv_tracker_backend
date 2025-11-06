@@ -4,6 +4,7 @@ import os
 import certifi
 from datetime import datetime
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 from api.models.bcv_currency import BcvCurrency
 from api.models.bd_currency import Base, Currency
@@ -11,6 +12,8 @@ from api.services.bd_service import save_currencies_to_db, SessionLocal
 from api.utils.constants import Constants
 
 class DollarService:
+    CARACAS_TZ = ZoneInfo('America/Caracas')
+
     def getDollarValueByBCV():
         url = requests.get("https://www.bcv.org.ve/", verify=False)
         if url.status_code == 200:
@@ -18,7 +21,7 @@ class DollarService:
             x=soup.findAll(id="dolar")
             print(str(x[0]))
 
-    async def getCurrenciesByBCV():
+    async def getCurrenciesByBCV(self):
         try: 
             print("Fetching currencies from BCV...")
             url = requests.get(Constants.BCV_URL, verify=False)
@@ -26,12 +29,12 @@ class DollarService:
             if url.status_code == 200:
                 soup = BeautifulSoup(url.content, "html.parser")
                 date = soup.findAll(class_='date-display-single')
-                checkDate = DollarService.validateDate(date[0].attrs.get('content')) if date else False
+                checkDate = self.validateDate(date[0].attrs.get('content')) if date else False
                 currencies = soup.findAll(class_="col-sm-12 col-xs-12")
                 for item in currencies: 
                     getImage, getCode, getCurrency, getName  = item.find(class_='icono_bss_blanco1'), item.find('span'), item.find('strong'), item.attrs.get('id')
                     elements.append(
-                        DollarService.createBCVCurrency(
+                        self.createBCVCurrency(
                             getCode,
                             getName,
                             getImage,
@@ -45,7 +48,7 @@ class DollarService:
             print(f"An error occurred: {e}")
             return []
         
-    async def getSavedCurrencies(today_data: Optional[bool] = None):
+    async def getSavedCurrencies(self, today_data: Optional[bool] = None):
         session = SessionLocal()
         try:
             query = session.query(Currency)
@@ -74,15 +77,17 @@ class DollarService:
         finally:
             session.close()
         
-    def validateDate(date_str: str) -> bool:
+    def validateDate(self, date_str: str) -> bool:
         try:
             date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-            return date_obj.date() == datetime.utcnow().strftime("%Y-%m-%d")
+            return date_obj.date() == self.getZoneTime().strftime("%Y-%m-%d").date()
         except ValueError:
             return False
 
+    def getZoneTime(self):
+        return datetime.now(self.CARACAS_TZ)
 
-    def createBCVCurrency(code, name, linkImage, exchangeRate, today) -> Currency:
+    def createBCVCurrency(self, code, name, linkImage, exchangeRate, today) -> Currency:
         return Currency(
             code=str(code.text.strip().replace(' ', '')) if code else '',
             name=str(name.strip()).capitalize() if name else '',
