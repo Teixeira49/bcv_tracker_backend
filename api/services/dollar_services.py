@@ -1,8 +1,9 @@
 from bs4 import BeautifulSoup
 import json
 import httpx
+import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from api.core.client.http_client import HttpClient
 from api.models.bd_currency import Currency
@@ -119,37 +120,93 @@ class DollarService:
             average,
             c.BINANCE_NAME
         )
-     
-    
-    """   
-    async def getSavedCurrencies(self, today_data: Optional[bool] = None):
+        
+    async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
         session = SessionLocal()
         try:
             query = session.query(Currency)
 
-            if today_data is None:
-                rows = query.order_by(Currency.id.desc()).all()
-            else:
-                rows = query.filter(Currency.todayData == today_data).order_by(Currency.id.desc()).all()
+            # Si se proporciona una lista de plataformas y no está vacía, filtra por ellas.
+            if platforms:
+                query = query.filter(Currency.platform.in_(platforms))
+
+            rows = query.order_by(Currency.id.desc()).all()
 
             result = []
             for r in rows:
-                result.append({
-                    "id": r.id,
-                    "code": r.code,
-                    "name": r.name,
-                    "symbolLinkImage": r.symbolLinkImage,
-                    "value": r.value,
-                    "createDate": r.createDate.isoformat() if r.createDate else None,
-                    "updateDate": r.updateDate.isoformat() if r.updateDate else None,
-                })
+                serialized_data = self.serialize_with_image(r)
+                serialized_data['id'] = r.id  # Añadimos el ID que no está en to_dict()
+                result.append(serialized_data)
             return result
         except Exception as e:
             print(f"An error occurred while fetching saved currencies: {e}")
             return []
         finally:
             session.close()
-        """ 
+         
+    
+    async def get_raw_bcv_currencies(self) -> List[Currency]:
+        """Obtiene las tasas del BCV y devuelve una lista de objetos Currency sin serializar."""
+        try:
+            url = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
+            elements = []
+            soup = BeautifulSoup(url, c.F_HTML)
+            
+            currencies_soup = soup.findAll(class_=tag.CLASS_CURRENCY)
+            for item in currencies_soup: 
+                getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
+                elements.append(
+                    self.createCurrency(
+                        getCode.text,
+                        getName,
+                        self.helper.formatCuValue(getCurrency.text)
+                    )
+                )
+            return elements
+        except Exception as e:
+            print(f"Error fetching raw BCV currencies: {e}")
+            return []
+
+    async def get_raw_yadio_currencies(self) -> List[Currency]:
+        """Obtiene las tasas de Yadio y devuelve una lista de objetos Currency sin serializar."""
+        try:
+            response = await self.client.get(endpoints.getParMktExRate("VES"))
+            currencies = [
+                self.createCurrency("USD", "Dolar", response["VES"]["VES"] / response["VES"]["USD"], c.YADIO_NAME),
+                self.createCurrency("EUR", "Euro", response["VES"]["VES"] / response["VES"]["EUR"], c.YADIO_NAME),
+                self.createCurrency("BTC", "Bitcoin", response["BTC"], c.YADIO_NAME)
+            ]
+            return currencies
+        except Exception as e:
+            print(f"Error fetching raw Yadio currencies: {e}")
+            return []
+
+    async def get_raw_binance_currencies(self) -> List[Currency]:
+        """Obtiene las 4 tasas de Binance (USDT/USDC Buy/Sell) y devuelve una lista de objetos Currency."""
+        try:
+            async with httpx.AsyncClient() as client:
+                tasks = [
+                    self.getCurrenciesByBinance(client, "USDT", "VES", "Buy"),
+                    self.getCurrenciesByBinance(client, "USDC", "VES", "Buy"),
+                    self.getCurrenciesByBinance(client, "USDT", "VES", "Sell"),
+                    self.getCurrenciesByBinance(client, "USDC", "VES", "Sell")
+                ]
+                binance_currencies = await asyncio.gather(*tasks)
+                return list(binance_currencies)
+        except Exception as e:
+            print(f"Error fetching raw Binance currencies: {e}")
+            return []
+
+    async def save_currencies_to_db_async(self, currencies: List[Currency]):
+        """Guarda una lista de monedas en la base de datos de forma asíncrona."""
+        if not currencies:
+            return {"message": "No currencies provided to save.", "updated_count": 0}
+        
+        loop = asyncio.get_running_loop()
+        # save_currencies_to_db es una función síncrona bloqueante
+        await loop.run_in_executor(None, save_currencies_to_db, currencies)
+        
+        return {"message": f"Successfully processed {len(currencies)} currencies for DB update.", "updated_count": len(currencies)}
 
     def createCurrency(self, code: str = c.EMPTY_STRING, name: str = c.EMPTY_STRING, value:float = 0.0, platform: str = c.BCV_NAME) -> Currency:
         return Currency(

@@ -6,6 +6,7 @@ import httpx
 
 from api.core.response.response_wrapper import api_response
 from api.services.dollar_services import DollarService
+from api.utils.constants.constants import Constants as c
 
 router = APIRouter(prefix="/api/venezuela", tags=["Venezuela"])
 
@@ -40,8 +41,8 @@ async def get_all_currencies(averaged: bool = Query(False)):
         # Procesamos la lógica de Binance según el parámetro
         if averaged:
             binance_data = [
-                dollar_service.serialize_with_image(dollar_service.createBinanceCurrency("USDT", "Tether", (usdt_buy.value + usdt_sell.value) / 2)),
-                dollar_service.serialize_with_image(dollar_service.createBinanceCurrency("USDC", "USD Coin", (usdc_buy.value + usdc_sell.value) / 2))
+                dollar_service.serialize_with_image(dollar_service.createCurrency("USDT", "Tether", (usdt_buy.value + usdt_sell.value) / 2, c.BINANCE_NAME)),
+                dollar_service.serialize_with_image(dollar_service.createCurrency("USDC", "USD Coin", (usdc_buy.value + usdc_sell.value) / 2, c.BINANCE_NAME))
             ]
         else:
             binance_data = [
@@ -138,8 +139,8 @@ async def get_binance_averaged():
         avg_usdc = (usdc_buy.value + usdc_sell.value) / 2
 
         # Creamos las nuevas entidades promediadas con nombres limpios
-        tether_averaged = dollar_service.createBinanceCurrency("USDT", "Tether", avg_tether)
-        usdc_averaged = dollar_service.createBinanceCurrency("USDC", "USD Coin", avg_usdc)
+        tether_averaged = dollar_service.createCurrency("USDT", "Tether", avg_tether, c.BINANCE_NAME)
+        usdc_averaged = dollar_service.createCurrency("USDC", "USD Coin", avg_usdc, c.BINANCE_NAME)
 
         return api_response([
             dollar_service.serialize_with_image(tether_averaged),
@@ -153,21 +154,68 @@ async def get_binance_averaged():
 # --------------------------------------------------------------------------------------------
 
 @router.put(
-    "/update-latest-exchange-rate", 
+    "/update-currencies", 
     tags=["Venezuela | Save Data"], 
-    summary="Actualizar base de datos con tasas del BCV"
+    summary="Obtiene y guarda en la BD las tasas de las fuentes seleccionadas"
 )
-async def get_latest_exchange_rate():
-    try:
-        exchange_rate = await dollar_service.getCurrenciesByBCV() # Llama al método desde la instancia
-        return {"exchange_rate": exchange_rate}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+async def update_currencies(
+    bcv: bool = Query(False, description="Incluir y guardar tasas del BCV."),
+    yadio: bool = Query(False, description="Incluir y guardar tasas de Yadio.io."),
+    binance: bool = Query(False, description="Incluir y guardar tasas de Binance P2P.")
+):
+    """
+    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance)
+    y actualiza los registros correspondientes en la base de datos.
+    """
+    if not any([bcv, yadio, binance]):
+        raise HTTPException(
+            status_code=400,
+            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance."
+        )
+
+    tasks = []
+    if bcv:
+        tasks.append(dollar_service.get_raw_bcv_currencies())
+    if yadio:
+        tasks.append(dollar_service.get_raw_yadio_currencies())
+    if binance:
+        tasks.append(dollar_service.get_raw_binance_currencies())
     
-@router.get("/actual-exchange-rate")
-async def get_saved_currencies(today_data: Optional[bool] = Query(None, alias="today-data")):
     try:
-        currencies = await dollar_service.getSavedCurrencies(today_data) # Llama al método desde la instancia
-        return {"exchange_rate": currencies}
+        list_of_currency_lists = await asyncio.gather(*tasks)
+        
+        all_currencies = [currency for sublist in list_of_currency_lists for currency in sublist]
+        
+        if not all_currencies:
+            return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_currencies": 0})
+
+        result = await dollar_service.save_currencies_to_db_async(all_currencies)
+        return api_response(result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ocurrió un error durante la actualización: {str(e)}")
+    
+@router.get("/saved-currencies", tags=["Venezuela | Save Data"], )
+async def get_saved_currencies(
+    bcv: bool = Query(False, description="Incluir tasas guardadas del BCV."),
+    yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
+    binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P.")
+):
+    """
+    Retorna las últimas tasas de cambio guardadas en la base de datos.
+    Se puede filtrar por una o más fuentes de datos.
+    Si no se especifica ninguna fuente, se retornarán todas las monedas guardadas.
+    """
+    try:
+        platforms_to_fetch = []
+        if bcv:
+            platforms_to_fetch.append(c.BCV_NAME)
+        if yadio:
+            platforms_to_fetch.append(c.YADIO_NAME)
+        if binance:
+            platforms_to_fetch.append(c.BINANCE_NAME)
+
+        # Si la lista está vacía, el servicio traerá todo.
+        result = await dollar_service.getSavedCurrencies(platforms=platforms_to_fetch)
+        return api_response(result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
