@@ -58,8 +58,6 @@ def save_currencies_to_db(currencies: List[Currency]):
                     code=cur.code,
                     name=cur.name,
                     platform=cur.platform,
-                    platformLinkImage=cur.platformLinkImage,
-                    symbolLinkImage=cur.symbolLinkImage,
                     value=cur.value,
                     createDate=now,
                     updateDate=now,
