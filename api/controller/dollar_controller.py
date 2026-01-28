@@ -68,6 +68,16 @@ async def get_bcv_currencies():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+@router.get("/bcv/with-memory")
+async def get_bcv_with_memory(update: bool = Query(False)):
+    try:
+        if update:
+            return api_response(await dollar_service.getCurrenciesByBCV())
+        else:
+            return api_response(await dollar_service.getSavedCurrencies(platforms=[c.BCV_NAME]))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/bcv/dollar")
 async def get_bcv_dollar():
     try:
@@ -198,24 +208,63 @@ async def update_currencies(
 async def get_saved_currencies(
     bcv: bool = Query(False, description="Incluir tasas guardadas del BCV."),
     yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
-    binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P.")
+    binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P."),
+    fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
+    enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
+    enforce_yadio_dollar: bool = Query(False, description="Si es True, filtra resultados de Yadio para mostrar solo el Dólar.")
 ):
     """
     Retorna las últimas tasas de cambio guardadas en la base de datos.
     Se puede filtrar por una o más fuentes de datos.
-    Si no se especifica ninguna fuente, se retornarán todas las monedas guardadas.
+    Si no se especifica ninguna fuente y fill_missing es False, se retornarán todas las monedas guardadas.
+    Si fill_missing es True, las fuentes en False se obtendrán en vivo.
     """
     try:
-        platforms_to_fetch = []
-        if bcv:
-            platforms_to_fetch.append(c.BCV_NAME)
-        if yadio:
-            platforms_to_fetch.append(c.YADIO_NAME)
-        if binance:
-            platforms_to_fetch.append(c.BINANCE_NAME)
+        db_platforms = []
+        live_tasks = []
 
-        # Si la lista está vacía, el servicio traerá todo.
-        result = await dollar_service.getSavedCurrencies(platforms=platforms_to_fetch)
-        return api_response(result)
+        # Lógica para determinar origen de datos por plataforma
+        if bcv:
+            db_platforms.append(c.BCV_NAME)
+        elif fill_missing:
+            live_tasks.append(dollar_service.get_raw_bcv_currencies())
+
+        if yadio:
+            db_platforms.append(c.YADIO_NAME)
+        elif fill_missing:
+            live_tasks.append(dollar_service.get_raw_yadio_currencies())
+
+        if binance:
+            db_platforms.append(c.BINANCE_NAME)
+        elif fill_missing:
+            live_tasks.append(dollar_service.get_raw_binance_currencies())
+
+        results = []
+
+        # 1. Obtener datos de BD
+        # Si fill_missing es True, solo buscamos en BD si hay plataformas explícitas.
+        # Si fill_missing es False, mantenemos el comportamiento original (si no hay flags, trae todo).
+        if not fill_missing or db_platforms:
+            results.extend(await dollar_service.getSavedCurrencies(platforms=db_platforms))
+
+        # 2. Obtener datos en vivo (si aplica)
+        if live_tasks:
+            list_of_lists = await asyncio.gather(*live_tasks)
+            for sublist in list_of_lists:
+                for currency in sublist:
+                    results.append(dollar_service.serialize_with_image(currency))
+
+        # 3. Filtrado por enforce flags
+        final_results = []
+        for item in results:
+            # Filtro BCV: Si enforce está activo y es BCV, solo pasa si el nombre es "Dolar"
+            if enforce_bcv_dollar and item.get('platform') == c.BCV_NAME and item.get('name') != "Dolar":
+                continue
+            # Filtro Yadio: Si enforce está activo y es Yadio, solo pasa si el nombre es "Dolar"
+            if enforce_yadio_dollar and item.get('platform') == c.YADIO_NAME and item.get('name') != "Dolar":
+                continue
+            final_results.append(item)
+
+        return api_response(final_results)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
