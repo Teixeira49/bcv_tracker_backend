@@ -17,3 +17,14 @@ class Helper:
     
     def getZoneTime(self):
         return datetime.now(self.CARACAS_TZ)
+    
+    def formatCuValue(self, value: str) -> float:
+        return float(value.strip().replace(",", "."))
+    
+    def validateDate(self, date_str: str) -> bool:
+        try:
+            date_from_bcv = datetime.fromisoformat(date_str).date()
+            return date_from_bcv == Helper().getZoneTime().date()
+        except ValueError:
+            print("Invalid date format")
+            return False
