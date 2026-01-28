@@ -1,0 +1,11 @@
+import os
+
+class Config:
+
+    DATABASE_URL = os.getenv("DATABASE_URL")
+
+    OFFICIAL_URL = os.getenv("OFFICIAL_MARKET_DATA_PROVIDER_URL")
+
+    PARALLEL_MARKET_A_URL = os.getenv("MARKET_DATA_PROVIDER_A_URL")
+
+    PARALLEL_MARKET_B_URL = os.getenv("MARKET_DATA_PROVIDER_B_URL")
