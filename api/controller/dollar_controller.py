@@ -74,7 +74,7 @@ async def get_bcv_with_memory(update: bool = Query(False)):
         if update:
             return api_response(await dollar_service.getCurrenciesByBCV())
         else:
-            return api_response(await dollar_service.getSavedCurrencies(platforms=[c.BCV_NAME]))
+            return api_response(await dollar_service.get_stored_bcv_data())
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -192,9 +192,28 @@ async def update_currencies(
         tasks.append(dollar_service.get_raw_binance_currencies())
     
     try:
-        list_of_currency_lists = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
         
-        all_currencies = [currency for sublist in list_of_currency_lists for currency in sublist]
+        all_currencies = []
+        result_idx = 0
+
+        if bcv:
+            bcv_res = results[result_idx]
+            result_idx += 1
+            if isinstance(bcv_res, dict):
+                all_currencies.extend(bcv_res.get("currencies", []))
+                if bcv_res.get("date"):
+                    await dollar_service.save_platform_date_async(c.BCV_NAME, bcv_res["date"])
+            elif isinstance(bcv_res, list):
+                all_currencies.extend(bcv_res)
+        
+        if yadio:
+            all_currencies.extend(results[result_idx])
+            result_idx += 1
+            
+        if binance:
+            all_currencies.extend(results[result_idx])
+            result_idx += 1
         
         if not all_currencies:
             return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_currencies": 0})
@@ -250,8 +269,18 @@ async def get_saved_currencies(
         # 2. Obtener datos en vivo (si aplica)
         if live_tasks:
             list_of_lists = await asyncio.gather(*live_tasks)
+            live_currencies_flat = []
             for sublist in list_of_lists:
-                for currency in sublist:
+                # Manejo especial para BCV que retorna dict {'date':..., 'currencies':...}
+                if isinstance(sublist, dict) and "currencies" in sublist:
+                    live_currencies_flat.extend(sublist["currencies"])
+                elif isinstance(sublist, list):
+                    live_currencies_flat.extend(sublist)
+            
+            # Calculamos el indicador ROC comparando con BD
+            if live_currencies_flat:
+                processed_live = await dollar_service.calculate_live_changes(live_currencies_flat)
+                for currency in processed_live:
                     results.append(dollar_service.serialize_with_image(currency))
 
         # 3. Filtrado por enforce flags

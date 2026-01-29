@@ -2,12 +2,11 @@ from bs4 import BeautifulSoup
 import json
 import httpx
 import asyncio
-from datetime import datetime
 from typing import Optional, List
 
 from api.core.client.http_client import HttpClient
 from api.models.bd_currency import Currency
-from api.services.bd_service import save_currencies_to_db, SessionLocal
+from api.services.bd_service import save_currencies_to_db, save_platform_date, get_platform_date, SessionLocal
 from api.utils.constants.constants import Constants as c
 from api.utils.constants.scrapping_tags import ScrappingTags as tag
 from api.utils.helpers.helper import Helper
@@ -110,7 +109,6 @@ class DollarService:
         advisors = response["data"]
         prices = []
         for advisor in advisors:
-            print(advisor)
             prices.append(float(advisor["adv"]["price"]))
         average = sum(prices) / len(prices)
 
@@ -143,6 +141,15 @@ class DollarService:
             return []
         finally:
             session.close()
+
+    async def get_stored_bcv_data(self):
+        """Retorna las monedas guardadas del BCV junto con la fecha almacenada."""
+        loop = asyncio.get_running_loop()
+        
+        currencies = await self.getSavedCurrencies(platforms=[c.BCV_NAME])
+        date_str = await loop.run_in_executor(None, get_platform_date, c.BCV_NAME)
+        
+        return {"date": date_str, "currencies": currencies}
          
     
     async def get_raw_bcv_currencies(self) -> List[Currency]:
@@ -153,6 +160,7 @@ class DollarService:
             soup = BeautifulSoup(url, c.F_HTML)
             
             currencies_soup = soup.findAll(class_=tag.CLASS_CURRENCY)
+            date_str = currencies_soup[0].attrs.get(tag.KEY_DATE) if currencies_soup else None
             for item in currencies_soup: 
                 getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
                 elements.append(
@@ -162,7 +170,7 @@ class DollarService:
                         self.helper.formatCuValue(getCurrency.text)
                     )
                 )
-            return elements
+            return {"date": date_str, "currencies": elements}
         except Exception as e:
             print(f"Error fetching raw BCV currencies: {e}")
             return []
@@ -208,12 +216,40 @@ class DollarService:
         
         return {"message": f"Successfully processed {len(currencies)} currencies for DB update.", "updated_count": len(currencies)}
 
-    def createCurrency(self, code: str = c.EMPTY_STRING, name: str = c.EMPTY_STRING, value:float = 0.0, platform: str = c.BCV_NAME) -> Currency:
+    async def save_platform_date_async(self, platform: str, date_value: str):
+        """Guarda la fecha de la plataforma en la base de datos de forma asíncrona."""
+        if not date_value:
+            return
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, save_platform_date, platform, date_value)
+
+    async def calculate_live_changes(self, currencies: List[Currency]) -> List[Currency]:
+        """Calcula el ROC para una lista de monedas en vivo comparando con la BD."""
+        if not currencies:
+            return []
+        
+        loop = asyncio.get_running_loop()
+        def _calc():
+            session = SessionLocal()
+            try:
+                for cur in currencies:
+                    existing = session.query(Currency).filter(Currency.code == cur.code, Currency.platform == cur.platform).first()
+                    if existing and existing.value and existing.value != 0:
+                        cur.change = ((cur.value - existing.value) / existing.value) * 100
+                    else:
+                        cur.change = 0.0
+                return currencies
+            finally:
+                session.close()
+        return await loop.run_in_executor(None, _calc)
+
+    def createCurrency(self, code: str = c.EMPTY_STRING, name: str = c.EMPTY_STRING, value:float = 0.0, platform: str = c.BCV_NAME, change: float = 0.0) -> Currency:
         return Currency(
             code=code.strip(),
             name=name.strip().capitalize(),
             platform=platform,
             value=value,
+            change=change,
             createDate=Helper().getZoneTime(),
             updateDate=Helper().getZoneTime()
         )
