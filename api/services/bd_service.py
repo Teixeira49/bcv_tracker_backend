@@ -1,14 +1,14 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
-import os
 from typing import List
 
-from ..models.bd_currency import Base, Currency
-from api.utils.helper import Helper
+from api.core.config.config import Config as c
+from ..models.bd_currency import Base, Currency, PlatformDate
+from api.utils.helpers.helper import Helper
 
 # Lee la URL de la base de datos desde las variables de entorno.
 # El archivo .env que mostraste contiene esta variable. Vercel la inyectará automáticamente.
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = c.DATABASE_URL
 
 if not DATABASE_URL:
     raise ValueError("No DATABASE_URL environment variable set")
@@ -20,6 +20,18 @@ def init_db():
     """Crear tablas si no existen."""
     Base.metadata.create_all(bind=engine)
 
+def reset_db():
+    """Comprueba si la tabla existe y la elimina para reiniciarla."""
+    inspector = inspect(engine)
+    # Verificamos si la tabla 'currencies' existe
+    if inspector.has_table(Currency.__tablename__):
+        print(f"Reiniciando tabla: {Currency.__tablename__}")
+        # Eliminamos solo la tabla específica
+        Currency.__table__.drop(engine)
+    
+    # Volvemos a crear las tablas
+    init_db()
+
 def save_currencies_to_db(currencies: List[Currency]):
 
     init_db()
@@ -30,27 +42,35 @@ def save_currencies_to_db(currencies: List[Currency]):
             # Intenta obtener el registro existente con el mismo código y valor de todayData
             existing_row = session.query(Currency).filter(
                 Currency.code == cur.code,
-                Currency.todayData == cur.todayData
+                Currency.platform == cur.platform,
             ).first()
 
             # actualizar o crear el registro "todayData == True"
             if existing_row:
                 # Si existe un registro con el mismo código y todayData, actualízalo
+                # Calculamos el indicador de variacion % (ROC)
+                previous_value = existing_row.value
+                if previous_value and previous_value != 0:
+                    cur.change = ((cur.value - previous_value) / previous_value) * 100 # Cambiar a un helper
+                else:
+                    cur.change = 0.0
+
                 existing_row.name = cur.name
-                existing_row.linkImage = cur.linkImage
-                existing_row.exchangeRate = cur.exchangeRate
+                existing_row.value = cur.value
+                existing_row.change = cur.change
                 existing_row.updateDate = now
             # actualizar o crear el registro "todayData == False"
             else:
                 # Si no existe un registro con el mismo código y todayData, crea uno nuevo
+                cur.change = 0.0
                 new_currency = Currency(
                     code=cur.code,
                     name=cur.name,
-                    linkImage=cur.linkImage,
-                    exchangeRate=cur.exchangeRate,
+                    platform=cur.platform,
+                    value=cur.value,
+                    change=cur.change,
                     createDate=now,
                     updateDate=now,
-                    todayData=cur.todayData
                 )
                 session.add(new_currency)
 
@@ -58,5 +78,40 @@ def save_currencies_to_db(currencies: List[Currency]):
     except Exception:
         session.rollback()
         raise
+    finally:
+        session.close()
+
+def save_platform_date(platform: str, date_value: str):
+    init_db()
+    session = SessionLocal()
+    try:
+        now = Helper().getZoneTime()
+        existing_row = session.query(PlatformDate).filter(PlatformDate.platform == platform).first()
+
+        if existing_row:
+            existing_row.date = date_value
+            existing_row.updateDate = now
+        else:
+            new_entry = PlatformDate(
+                platform=platform,
+                date=date_value,
+                createDate=now,
+                updateDate=now
+            )
+            session.add(new_entry)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+def get_platform_date(platform: str) -> str:
+    session = SessionLocal()
+    try:
+        row = session.query(PlatformDate).filter(PlatformDate.platform == platform).first()
+        return row.date if row else None
+    except Exception:
+        return None
     finally:
         session.close()
