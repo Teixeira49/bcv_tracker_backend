@@ -2,9 +2,13 @@ name: Scheduled Scrape
 
 on:
   schedule:
-    # Ejecuta a 10:00 UTC y 19:15 UTC diariamente — Solo Lunes a Viernes
-    - cron: '0 10 * * 1-5'
-    - cron: '15 21 * * 1-5'
+    # Ejecuta los 7 días de la semana en horarios UTC:
+    - cron: '0 3 * * *'    # 3:00 AM
+    - cron: '0 7 * * *'    # 7:00 AM
+    - cron: '0 11 * * *'   # 11:00 AM (Mediodía)
+    - cron: '45 14 * * *'  # 2:45 PM
+    - cron: '15 18 * * *'  # 6:15 PM
+    - cron: '0 23 * * *'   # 11:00 PM (Noche - Especial)
     
 env:
   BASE_URL: ${{ secrets.BACKEND_BASE_URL }} # Obtiene el valor del Secret de GitHub
@@ -15,7 +19,19 @@ jobs:
     steps:
       - name: Trigger scrape endpoint
         run: |
-          URL_ENDPOINT="$BASE_URL/api/update-latest-exchange-rate"
+          # Obtener la hora actual en formato 0-23 (UTC)
+          CURRENT_HOUR=$(date +%H)
+          
+          # Por defecto bcv es false
+          BCV_PARAM="false"
+          
+          # Si es la ejecución de las 11 PM (Hora 23), activamos bcv
+          if [ "$CURRENT_HOUR" -eq "23" ]; then
+            BCV_PARAM="true"
+            echo "🕒 Ejecución de las 11 PM detectada. Activando BCV."
+          fi
+
+          URL_ENDPOINT="$BASE_URL/api/venezuela/update-currencies?bcv=$BCV_PARAM&yadio=true&binance=true"
 
           echo "Ejecutando solicitud PUT a: $URL_ENDPOINT"
           
