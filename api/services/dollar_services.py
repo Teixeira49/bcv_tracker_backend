@@ -159,8 +159,10 @@ class DollarService:
             elements = []
             soup = BeautifulSoup(url, c.F_HTML)
             
+            date_elements = soup.findAll(class_=tag.CLASS_DATE)
+            date_str = date_elements[0].attrs.get(tag.KEY_DATE) if date_elements else None
+
             currencies_soup = soup.findAll(class_=tag.CLASS_CURRENCY)
-            date_str = currencies_soup[0].attrs.get(tag.KEY_DATE) if currencies_soup else None
             for item in currencies_soup: 
                 getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
                 elements.append(

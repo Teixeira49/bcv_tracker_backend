@@ -169,9 +169,9 @@ async def get_binance_averaged():
     summary="Obtiene y guarda en la BD las tasas de las fuentes seleccionadas"
 )
 async def update_currencies(
-    bcv: bool = Query(False, description="Incluir y guardar tasas del BCV."),
-    yadio: bool = Query(False, description="Incluir y guardar tasas de Yadio.io."),
-    binance: bool = Query(False, description="Incluir y guardar tasas de Binance P2P.")
+    bcv: bool = Query(True, description="Incluir y guardar tasas del BCV."),
+    yadio: bool = Query(True, description="Incluir y guardar tasas de Yadio.io."),
+    binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P.")
 ):
     """
     Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance)
