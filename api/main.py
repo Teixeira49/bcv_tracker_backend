@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from api.utils.html.root_html import root_html
 from api.utils.constants.constants import Constants as c
 import traceback
@@ -23,6 +23,13 @@ try:
     def root():
         html_content = root_html()
         return HTMLResponse(content=html_content, status_code=200)
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    async def favicon():
+        file_path = Path(__file__).parent / "static" / "favicon.ico"
+        if file_path.exists():
+            return FileResponse(file_path)
+        return Response(status_code=204)
 
 except Exception as e:
     # Si falla la importación, exponemos un app mínimo que muestre la traza para debugging
