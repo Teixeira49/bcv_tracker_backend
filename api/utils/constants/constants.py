@@ -1,8 +1,32 @@
 class Constants:
 
     APP_NAME = "DolarTracker"
+    
+    APP_SUMMARY = "API RESTful de alto rendimiento para el monitoreo y centralización de tasas de cambio en Venezuela (BCV, Paralelo y Cripto) con procesamiento concurrente y persistencia histórica."
 
-    VERSION = "1.1.0"
+    APP_DESCRIPTION="""
+## ¡Bienvenido a DolarTracker! 🚀
+Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, consolidando datos de múltiples fuentes confiables:
+*   **Banco Central de Venezuela (BCV)**: Tasas oficiales.
+*   **Yadio.io**: Tasas del mercado paralelo.
+*   **Binance P2P**: Tasas del mercado cripto (USDT/USDC).
+### Características Principales:
+*   **Caché inteligente**: Recuperación rápida de datos almacenados.
+*   **Promediado automático**: Cálculo de valores medios en mercados volátiles.
+*   **Persistencia**: Actualización masiva de la base de datos con un solo clic.
+    """
+
+    APP_LICENSE = {
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    }
+
+    APP_CONTACT = {
+        "name": "Teixeira49 Support",
+        "url": "https://github.com/Teixeira49",
+    }
+
+    VERSION = "1.1.1"
 
     EMPTY_STRING = ""
 
