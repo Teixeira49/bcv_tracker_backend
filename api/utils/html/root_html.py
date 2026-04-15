@@ -108,6 +108,7 @@ def root_html(app_name: str, version: str):
             <div class="button-group">
                 <a href="/docs" class="btn">Swagger Documentation</a>
                 <a href="/redoc" class="btn btn-secondary">ReDoc UI</a>
+                <a href="/health/ui" class="btn btn-secondary">Estado del Sistema</a>
                 <a href="https://github.com/Teixeira49/bcv_tracker_app" class="btn btn-accent" target="_blank">Descargar App Mobile</a>
             </div>
         </div>
