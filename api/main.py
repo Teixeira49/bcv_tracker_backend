@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse, Response
-from api.utils.html.root_html import root_html
-from api.utils.constants.constants import Constants as c
 import traceback
 from dotenv import load_dotenv
 
@@ -12,11 +10,17 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
+# Declaramos 'app' en el scope global para que el analizador estático de Vercel lo detecte
+app = FastAPI(title="DolarTracker")
+
 try:
     # intenta importar tu router normalmente
+    from api.utils.html.root_html import root_html
+    from api.utils.constants.constants import Constants as c
     from api.controller.dollar_controller import router as controller_app
 
-    app = FastAPI(title=c.APP_NAME, version=c.VERSION)
+    app.title = c.APP_NAME
+    app.version = c.VERSION
     app.include_router(controller_app)
 
     @app.get("/", response_class=HTMLResponse, tags=["Root"])
@@ -34,12 +38,12 @@ try:
 except Exception as e:
     # Si falla la importación, exponemos un app mínimo que muestre la traza para debugging
     tb = traceback.format_exc()
-    app = FastAPI(title="DolarTracker - Import Error")
+    app.title = "DolarTracker - Import Error"
     error_msg = str(e)
     error_type = type(e).__name__
 
     @app.get("/", tags=["API - Error Handling"])
-    async def root():
+    async def root_error():
         return {
             "status": "Critical Error during Initialization",
             "error_type": error_type,
