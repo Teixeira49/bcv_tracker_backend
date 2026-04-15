@@ -15,6 +15,7 @@ from api.openapi.redoc_theme import get_custom_redoc_html
 app = FastAPI(
     title="DolarTracker",
     redoc_url=None, # Desactivamos el ReDoc nativo para usar nuestra versión premium
+    docs_url=None,  # Desactivamos el Swagger nativo para inyectar nuestro CSS oscuro
 )
 
 def custom_openapi():
@@ -51,6 +52,8 @@ try:
     from api.utils.constants.constants import Constants as c
     from api.controller.dollar_controller import router as controller_app
     from api.utils.constants.tags_metadata import tags_metadata
+    from api.controller.docs_controller import router as docs_router
+    from api.controller.health_controller import router as health_router
 
     app.title = c.APP_NAME
     app.summary = c.APP_SUMMARY
@@ -61,26 +64,14 @@ try:
     app.openapi_tags = tags_metadata
     
     app.include_router(controller_app)
+    app.include_router(docs_router)  # Inyectamos el router de documentación
+    app.include_router(health_router) # Inyectamos el router de monitoreo
 
     @app.get("/", response_class=HTMLResponse, tags=["Root"], summary="Página de bienvenida", include_in_schema=False)
     def root():
         # Pasamos dinámicamente el nombre y la versión desde las constantes
         html_content = root_html(c.APP_NAME, c.VERSION)
         return HTMLResponse(content=html_content, status_code=200)
-
-    @app.get("/redoc", include_in_schema=False)
-    async def custom_redoc_ui_html():
-        return get_custom_redoc_html(app)
-
-    @app.get("/favicon.ico", include_in_schema=False)
-    async def favicon():
-        file_path = Path(__file__).parent / "static" / "favicon.ico"
-        return FileResponse(file_path) if file_path.exists() else Response(status_code=204)
-
-    @app.get("/logo_center.svg", include_in_schema=False)
-    async def logo_center():
-        file_path = Path(__file__).parent / "static" / "logo_center.svg"
-        return FileResponse(file_path, media_type="image/svg+xml") if file_path.exists() else Response(status_code=204)
 
 except Exception as e:
     # Fallback en caso de error de inicialización
