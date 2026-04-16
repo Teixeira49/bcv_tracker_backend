@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 import httpx
-from typing import Optional, List
+import asyncio
+from typing import List
 from api.models.schemas import BaseResponse, CurrencySchema, BcvResponseData, AllCurrenciesResponseData, UpdateCurrenciesResponseData, ErrorResponse
 
 from api.core.response.response_wrapper import api_response
