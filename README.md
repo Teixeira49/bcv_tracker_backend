@@ -1,3 +1,5 @@
+![alt text](image.png)
+
 # BCV Tracker Backend (DolarTracker) 🚀
 
 Este proyecto es el motor (Backend) de la aplicación **BCV Tracker**, diseñado para centralizar y monitorear las tasas de cambio de divisas en Venezuela. El sistema obtiene información en tiempo real de fuentes oficiales y alternativas para ofrecer datos precisos sobre el mercado cambiario.
@@ -31,22 +33,31 @@ El proyecto sigue una arquitectura limpia dividida en capas para facilitar su ma
 
 ```mermaid
 graph TD
-    User([App Mobile / Cliente]) --> API[FastAPI Entry Point]
-    API --> Controller[Dollar Controller]
-    Controller --> Service[Dollar Service]
+    User(["App Mobile / Cliente"]) --> API["FastAPI Entry Point Limpio"]
     
-    subgraph Data_Retrieval [Recolección de Datos]
-        Service --> Scraper[BCV Scraper - BeautifulSoup]
-        Service --> BinanceAPI[Binance P2P API]
-        Service --> YadioAPI[Yadio API]
+    API --> DollarController["Dollar Controller"]
+    API --> DocsController["Docs Controller"]
+    API --> HealthController["Health Controller"]
+    
+    DollarController --> DollarService["Dollar Service"]
+    
+    subgraph Core_Business ["Lógica de Negocio"]
+        DollarService --> Scraper["BCV Scraper"]
+        DollarService --> BinanceAPI["Binance API"]
+        DollarService --> YadioAPI["Yadio API"]
+        DollarService --> DB_Service["Database Service"]
+        DB_Service --> Postgres[("PostgreSQL DB")]
     end
     
-    Service --> DB_Service[Database Service]
-    DB_Service --> Postgres[(PostgreSQL DB)]
+    subgraph UI_Docs ["Interfaces y Documentación"]
+        DocsController --> SwaggerUI["Swagger UI - Dark Theme"]
+        DocsController --> ReDocUI["ReDoc UI - Custom Theme"]
+    end
     
-    Scraper --> WebBCV[Web Oficial BCV]
-    BinanceAPI --> ExtBinance[Binance Servers]
-    YadioAPI --> ExtYadio[Yadio Servers]
+    subgraph Monitoreo ["Estado del Sistema"]
+        HealthController --> HealthUI["Health Check HTML"]
+        HealthController --> HealthJSON["Health Status JSON"]
+    end
 ```
 
 ## 📦 Dependencias Requeridas
