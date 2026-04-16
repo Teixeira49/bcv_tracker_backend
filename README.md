@@ -1,4 +1,4 @@
-![alt text](image.png)
+<div align="center"> <img alt="image" src="https://github.com/user-attachments/assets/4654c3d3-ec12-444f-a793-928a57611417" /> </div>
 
 # BCV Tracker Backend (DolarTracker) 🚀
 
