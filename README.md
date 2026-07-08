@@ -115,6 +115,10 @@ Las principales librerías utilizadas en este proyecto son:
 ### Despliegue en Vercel
 Este proyecto está configurado para Vercel. Solo necesitas conectar tu repositorio a Vercel y se detectará automáticamente el archivo `vercel.json` y la aplicación en `api/main.py`.
 
+## 🤖 Tooling Agéntico
+
+Este repositorio incluye convenciones y capacidades versionadas para desarrollo asistido por IA (skills, rules y roles) en `.agents/`, más la config compartida en `.claude/pr-config.json` y el lockfile `skills-lock.json`. Al clonar, todo el equipo dispone de las mismas reglas sin configuración extra. Consulta el detalle en [CONTRIBUTING.md → Tooling Agéntico](CONTRIBUTING.md#-tooling-agéntico-agents-y-claude).
+
 ## 📱 Aplicación Front-end (Mobile)
 
 Este backend alimenta la siguiente aplicación móvil:

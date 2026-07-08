@@ -1,0 +1,8 @@
+{
+  "branchProjectCode": "DT",
+  "baseBranch": "development",
+  "productionBranch": "main",
+  "triggerMode": "manual",
+  "draftsDir": "docs/pull-requests/",
+  "reviewers": []
+}
