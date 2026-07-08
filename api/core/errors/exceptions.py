@@ -52,6 +52,18 @@ class SourceParsingError(ExternalSourceError):
     message_template = c.SOURCE_PARSING_MSG
 
 
+class SourceEmptyError(ExternalSourceError):
+    """La fuente respondió correctamente pero sin ofertas/datos utilizables.
+
+    Caso típico: Binance P2P devuelve una lista vacía (sin ofertas, rate-limit
+    silencioso) y no hay precios que promediar. Se distingue del parsing error
+    para no confundir "estructura cambiada" con "no hay datos ahora mismo".
+    """
+
+    status_code = c.STATUS_BAD_GATEWAY
+    message_template = c.SOURCE_EMPTY_MSG
+
+
 @contextmanager
 def source_guard(source: str):
     """Traduce fallos de red o de parseo en ``ExternalSourceError`` tipados.

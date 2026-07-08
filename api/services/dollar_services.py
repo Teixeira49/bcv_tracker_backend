@@ -5,7 +5,7 @@ import asyncio
 from typing import Optional, List
 
 from api.core.client.http_client import HttpClient
-from api.core.errors.exceptions import source_guard
+from api.core.errors.exceptions import source_guard, SourceEmptyError
 from api.models.bd_currency import Currency
 from api.services.bd_service import save_currencies_to_db, save_platform_date, get_platform_date, SessionLocal
 from api.utils.constants.constants import Constants as c
@@ -108,10 +108,15 @@ class DollarService:
         }
         with source_guard(c.BINANCE_NAME):
             response = await self.client.post(endpoints.getParMktP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
-            advisors = response["data"]
+            advisors = response.get("data") or []
             prices = []
             for advisor in advisors:
                 prices.append(float(advisor["adv"]["price"]))
+            # Validamos que haya precios antes de promediar: si Binance no
+            # devuelve ofertas (lista vacía, rate-limit) evitamos el
+            # ZeroDivisionError y propagamos un error tipado (502) con mensaje claro.
+            if not prices:
+                raise SourceEmptyError(c.BINANCE_NAME)
             average = sum(prices) / len(prices)
 
             return self.createCurrency(
