@@ -1,5 +1,7 @@
 import httpx
 
+from api.utils.constants.constants import Constants as c
+
 
 class HttpClient:
     """Cliente HTTP asíncrono real basado en ``httpx.AsyncClient``.
@@ -14,9 +16,7 @@ class HttpClient:
     provee, se crea un cliente efímero por llamada.
     """
 
-    DEFAULT_TIMEOUT = 10.0
-
-    def __init__(self, timeout: float = DEFAULT_TIMEOUT):
+    def __init__(self, timeout: float = c.HTTP_TIMEOUT):
         self._timeout = httpx.Timeout(timeout)
 
     async def get(self, url, params=None, headers=None, client=None):
