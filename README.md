@@ -97,10 +97,17 @@ Las principales librerías utilizadas en este proyecto son:
    ```
 
 4. **Configurar variables de entorno**:
-   Crea un archivo `.env` en la raíz con:
+   Crea un archivo `.env` en la raíz con **todas** las variables requeridas. Si falta alguna, la app aborta al arrancar con un mensaje que nombra la variable faltante.
    ```env
+   # Base de datos (PostgreSQL)
    DATABASE_URL=postgresql://usuario:password@localhost:5432/nombre_db
+
+   # Fuentes de datos externas (deben incluir el esquema http:// o https://)
+   OFFICIAL_MARKET_DATA_PROVIDER_URL=https://www.bcv.org.ve      # BCV (tasas oficiales)
+   MARKET_DATA_PROVIDER_A_URL=https://p2p.binance.com           # Binance P2P
+   MARKET_DATA_PROVIDER_B_URL=https://api.yadio.io              # Yadio.io
    ```
+   > Los valores de las URLs son ejemplos de los proveedores públicos usados por el proyecto; ajústalos según tu entorno. El `.env` está en `.gitignore` y nunca se versiona.
 
 5. **Ejecutar migraciones**:
    ```bash

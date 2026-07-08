@@ -47,6 +47,12 @@ def custom_openapi():
 app.openapi = custom_openapi
 
 try:
+    # Fail-fast: valida las variables de entorno requeridas antes de montar la
+    # app, para abortar con un mensaje que nombre la variable faltante en lugar
+    # del error críptico de httpx en cada request.
+    from api.core.config.config import Config
+    Config.validate()
+
     # Intenta importar tus módulos normalmente
     from api.utils.html.root_html import root_html
     from api.utils.constants.constants import Constants as c
@@ -74,15 +80,19 @@ try:
         return HTMLResponse(content=html_content, status_code=200)
 
 except Exception as e:
-    # Fallback en caso de error de inicialización
+    # Fallback en caso de error de inicialización.
+    # Guardamos el mensaje en una variable propia: `e` se elimina al salir del
+    # bloque `except` (semántica de Python 3) y no estaría disponible dentro de
+    # los handlers definidos abajo.
     tb = traceback.format_exc()
+    error_message = str(e)
     app.title = "DolarTracker - Import Error"
-    
+
     @app.get("/", tags=["API - Error Handling"])
     async def root_error():
         return {
             "status": "Critical Error during Initialization",
-            "message": str(e),
+            "message": error_message,
             "details": "Check /__import_error for the full stack trace"
         }
 
