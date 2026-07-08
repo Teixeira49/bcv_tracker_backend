@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "skills": {
+    "api-design-principles": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/backend-development/skills/api-design-principles/SKILL.md",
+      "computedHash": "19715a3a3ff7bf7b1e2ab1cb631ebe810d5b050ed6b3ab0c358e39e5e2e6d33a"
+    },
+    "api-pagination": {
+      "source": "aj-geddes/useful-ai-prompts",
+      "sourceType": "github",
+      "skillPath": "skills/api-pagination/SKILL.md",
+      "computedHash": "acea4f9aca3b15201407c3f938b5421a2601e518921baa0f9d264209b8bbf527"
+    },
+    "beautifulsoup-parsing": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "skillPath": "beautifulsoup-parsing/SKILL.md",
+      "computedHash": "e4dc915cc1a3fa7f8085643de8d837c2de03bab6e5bf8e2cb32fd173c4b889f0"
+    },
+    "cron-schedule": {
+      "source": "ruvnet/ruflo",
+      "sourceType": "github",
+      "skillPath": "plugins/ruflo-loop-workers/skills/cron-schedule/SKILL.md",
+      "computedHash": "3b7a2c37f19778e2cb1eaf45eab7d3f0ba7d7d4c21a50f96e69bc64907cb8413"
+    },
+    "decodo-scraper": {
+      "source": "decodo/decodo-openclaw-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "86504841f291cbff692a09c07f2619ef8ccd85098f667a1f382d22da1b9e4fb7"
+    },
+    "fastapi": {
+      "source": "fastapi/fastapi",
+      "sourceType": "github",
+      "skillPath": "fastapi/.agents/skills/fastapi/SKILL.md",
+      "computedHash": "e85d9e223fbc3183b1a599bbe8b02d2edf275d046ff5bcfd14352c92cdff52b3"
+    },
+    "fastapi-code-review": {
+      "source": "existential-birds/beagle",
+      "sourceType": "github",
+      "skillPath": "plugins/beagle-python/skills/fastapi-code-review/SKILL.md",
+      "computedHash": "d03ab56c69bbabd307c4744962bf28ac07085ba21888efb7ed89ecd411ea53ad"
+    },
+    "fastapi-templates": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/api-scaffolding/skills/fastapi-templates/SKILL.md",
+      "computedHash": "629e7e404a3627790138127508b889bf38de3e7fad3647f2bb4367e5bfd19bd1"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "781bd6d3f9b19f8c9af6b53d8d0e4876d0183841b565db34ca7092ffa412d111"
+    },
+    "neon": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon/SKILL.md",
+      "computedHash": "1159ab3e02a317e45a6cf0a42c0138b173ead24921b2712b5ef8c90a7a5ef89d"
+    }
+  }
+}

@@ -10,3 +10,13 @@ venv/
 
 # Logs and others
 git_history.txt
+
+# Esquema semántico interno de la BD (no se sube a producción/público)
+docs/schema/
+
+# Tooling agéntico (skills / rules / roles)
+# SÍ se versiona: .agents/, .claude/pr-config.json y skills-lock.json
+# NO se versiona (config personal / local del asistente y posibles secretos):
+.claude/settings.local.json
+.claude/*.local.json
+.mcp.local.json

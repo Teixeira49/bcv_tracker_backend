@@ -65,4 +65,74 @@ Si deseas agregar un nuevo monitor de divisas:
 
 ---
 
+## 🤖 Tooling Agéntico (`.agents/` y `.claude/`)
+
+Este repositorio versiona un conjunto de **convenciones y capacidades para asistentes de IA** (Claude Code y compatibles), de forma que todo el equipo desarrolle con las mismas reglas y atajos sin configuración adicional. Al clonar el repo ya vienen incluidos.
+
+### Estructura de `.agents/`
+
+```
+.agents/
+├── rules/    # Convenciones obligatorias del repositorio
+├── roles/    # Personas/expertos especializados para tareas concretas
+└── skills/   # Capacidades instalables (guías + scripts + plantillas)
+```
+
+#### `rules/` — Convenciones del repositorio
+Reglas que el asistente debe respetar en todo el flujo `issue → rama → commits → PR → release`:
+
+| Regla | Para qué sirve |
+|---|---|
+| `branch-naming.md` | Nomenclatura de ramas (`<tipo>/DT-<núm>`) y vínculo con el issue de GitHub |
+| `commit-convention.md` | Conventional Commits + gitmoji (estilo extensión *vivaxy*) |
+| `issue-convention.md` | Formato de issues (título con gitmoji + User Story + criterios) |
+| `pull-request.md` | Flujo, título y descripción de las PR (lee `.claude/pr-config.json`) |
+| `release-versioning.md` | SemVer, GitHub Releases y mantenimiento del `CHANGELOG.md` |
+| `standard-response.md` | Envelope de respuesta JSON consistente de la API |
+| `pagination-enforcement.md` | Uso obligatorio de paginación en endpoints de listado |
+| `schema-naming-convention.md` | Convención de nombres del esquema de base de datos |
+| `database-schema-sync.md` | Sincronización entre modelos y esquema documentado |
+
+#### `roles/` — Expertos especializados
+Personas que orientan al asistente según el tipo de tarea:
+
+- `backend_architect.md` — arquitectura en capas (FastAPI), envelope y patrones async.
+- `database_specialist.md` — capa de persistencia (SQLAlchemy + PostgreSQL), upsert y sesiones.
+- `domain_guardian.md` — invariantes del dominio cambiario (tasas, plataformas, Buy/Sell).
+- `performance_optimizer.md` — concurrencia async real y detección de código bloqueante.
+- `security_sentinel.md` — seguridad de la API pública (endpoint de escritura, secretos, scraping).
+- `documentation_agent.md` — OpenAPI/Swagger/ReDoc, docstrings y ejemplos de Pydantic.
+
+#### `skills/` — Capacidades instalables
+Skills traídas del ecosistema abierto (FastAPI, scraping con BeautifulSoup, paginación, diseño de APIs, Neon, cron, etc.). Se gestionan con el CLI `npx skills` y su procedencia queda fijada en **`skills-lock.json`** (raíz del repo), que registra el `source`, `skillPath` y un `hash` por skill para reproducibilidad.
+
+```bash
+npx skills find <query>     # buscar skills en el ecosistema
+npx skills add <package>    # instalar una skill
+npx skills check            # ver actualizaciones disponibles
+npx skills update           # actualizar las skills instaladas
+```
+
+### Configuración: `.claude/pr-config.json`
+Config compartida que las reglas leen para operar de forma consistente:
+
+- `branchProjectCode`: iniciales del proyecto para el ID de rama (`DT`).
+- `baseBranch` / `productionBranch`: `development` / `main`.
+- `triggerMode`: nivel de autonomía para subir PR/releases (`manual` | `ask` | `auto`).
+- `draftsDir`: carpeta de borradores de PR (`docs/pull-requests/`).
+- `reviewers`: reviewers candidatos del equipo.
+
+### Qué se versiona y qué se ignora
+- ✅ **Se versiona**: `.agents/` (rules, roles, skills), `.claude/pr-config.json` y `skills-lock.json`.
+- 🚫 **Se ignora** (ver `.gitignore`): config personal/local del asistente (`.claude/settings.local.json`, `.claude/*.local.json`, `.mcp.local.json`), variables de entorno (`.env`) y cualquier secreto o artefacto local. **Nunca** subas credenciales dentro de `.claude/` o `.agents/`.
+
+### Cómo usarlas
+1. Clona el repo: las reglas, roles y skills ya están disponibles, sin setup extra.
+2. Usa un asistente compatible (ej. Claude Code) desde la raíz del proyecto; detectará automáticamente `.agents/` y `.claude/pr-config.json`.
+3. Al crear issues, ramas, commits, PR o releases, el asistente aplicará las reglas de `.agents/rules/`.
+4. Para tareas específicas, invoca el rol adecuado de `.agents/roles/`.
+5. Para añadir o actualizar skills, usa `npx skills` y **commitea** los cambios en `.agents/skills/` junto con `skills-lock.json`.
+
+---
+
 ¡Feliz codificación! Si tienes dudas, abre un **Issue** para discutir tu propuesta antes de empezar.
