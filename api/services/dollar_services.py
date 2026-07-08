@@ -105,7 +105,7 @@ class DollarService:
             "User-Agent": "Mozilla/5.0",
             "Content-Type": "application/json"
         }
-        response = await self.client.post(endpoints.getParMktP2P(), data=json.dumps(dataPayload), headers=headers)
+        response = await self.client.post(endpoints.getParMktP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
         advisors = response["data"]
         prices = []
         for advisor in advisors:
