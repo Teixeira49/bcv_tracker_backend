@@ -31,7 +31,7 @@ jobs:
             echo "🕒 Ejecución de las 11 PM detectada. Activando BCV."
           fi
 
-          URL_ENDPOINT="$BASE_URL/api/venezuela/update-currencies?bcv=$BCV_PARAM&yadio=true&binance=true"
+          URL_ENDPOINT="$BASE_URL/api/v1/venezuela/update-currencies?bcv=$BCV_PARAM&yadio=true&binance=true"
 
           echo "Ejecutando solicitud PUT a: $URL_ENDPOINT"
           

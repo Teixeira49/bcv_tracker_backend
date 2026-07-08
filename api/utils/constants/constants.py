@@ -28,6 +28,13 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     VERSION = "1.1.1"
 
+    # Prefijo de versión del contrato de la API (versionado por path). Es
+    # independiente de VERSION (versión semántica de la app / metadata OpenAPI):
+    # un futuro `v2` convive con `v1` montando su propio router en paralelo.
+    # Los endpoints de negocio cuelgan de aquí; la infraestructura (health,
+    # docs, root) queda sin versionar.
+    API_V1_STR = "/api/v1"
+
     EMPTY_STRING = ""
 
     EMPTY_SPACE = " "

@@ -35,7 +35,7 @@ def _assert_error_envelope(body):
 def test_400_usa_envelope_uniforme():
     """La validación de 'ninguna fuente seleccionada' (400) usa el envelope uniforme."""
     response = client.put(
-        "/api/venezuela/update-currencies",
+        f"{c.API_V1_STR}/venezuela/update-currencies",
         params={"bcv": False, "yadio": False, "binance": False},
     )
     assert response.status_code == 400
@@ -49,7 +49,7 @@ def test_source_timeout_se_traduce_a_408(monkeypatch):
         "getCurrenciesByBCV",
         AsyncMock(side_effect=SourceTimeoutError(c.BCV_NAME)),
     )
-    response = client.get("/api/venezuela/bcv")
+    response = client.get(f"{c.API_V1_STR}/venezuela/bcv")
     assert response.status_code == 408
     body = response.json()
     _assert_error_envelope(body)
@@ -63,7 +63,7 @@ def test_source_unavailable_se_traduce_a_502(monkeypatch):
         "getCurrenciesByYadio",
         AsyncMock(side_effect=SourceUnavailableError(c.YADIO_NAME, detail="connection refused")),
     )
-    response = client.get("/api/venezuela/yadio")
+    response = client.get(f"{c.API_V1_STR}/venezuela/yadio")
     assert response.status_code == 502
     body = response.json()
     _assert_error_envelope(body)
@@ -78,7 +78,7 @@ def test_excepcion_no_controlada_devuelve_500_generico(monkeypatch):
         "getCurrenciesByBCV",
         AsyncMock(side_effect=ValueError(secret)),
     )
-    response = client.get("/api/venezuela/bcv")
+    response = client.get(f"{c.API_V1_STR}/venezuela/bcv")
     assert response.status_code == 500
     body = response.json()
     _assert_error_envelope(body)

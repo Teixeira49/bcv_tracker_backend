@@ -9,7 +9,11 @@ from api.core.response.response_wrapper import api_response
 from api.services.dollar_services import DollarService
 from api.utils.constants.constants import Constants as c
 
-router = APIRouter(prefix="/api/venezuela", tags=["Venezuela"])
+# El prefijo de versión (`/api/v1`) lo aporta main.py al incluir el router
+# (ver Constants.API_V1_STR). Aquí solo declaramos el segmento de dominio por
+# país (`/venezuela`), pensado para escalar a otros países (ej. `/argentina`)
+# bajo la misma versión. Resultado final: `/api/v1/venezuela/...`.
+router = APIRouter(prefix="/venezuela", tags=["Venezuela"])
 
 dollar_service = DollarService() # Crea una instancia de DollarService
 
