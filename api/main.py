@@ -69,7 +69,12 @@ try:
     app.contact = c.APP_CONTACT
     app.openapi_tags = tags_metadata
     
-    app.include_router(controller_app)
+    # Endpoints de negocio: versionados por path bajo `/api/v1` (ver
+    # Constants.API_V1_STR). El router ya aporta el segmento de país
+    # (`/venezuela`) → resultado `/api/v1/venezuela/...`.
+    app.include_router(controller_app, prefix=c.API_V1_STR)
+    # Infraestructura sin versionar: la documentación y el health/monitoreo
+    # exponen URLs estables e independientes de la versión del contrato.
     app.include_router(docs_router)  # Inyectamos el router de documentación
     app.include_router(health_router) # Inyectamos el router de monitoreo
 
