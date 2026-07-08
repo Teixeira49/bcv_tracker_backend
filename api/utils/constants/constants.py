@@ -38,6 +38,8 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     VERIFY = False
 
+    HTTP_TIMEOUT = 10.0
+
     STATUS_OK = 200
 
     STATUS_OK_MSG = 'Success'

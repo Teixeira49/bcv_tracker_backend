@@ -3,7 +3,6 @@ uvicorn[standard]
 pydantic
 sqlalchemy
 certifi
-requests
 beautifulsoup4
 python-dotenv
 alembic
