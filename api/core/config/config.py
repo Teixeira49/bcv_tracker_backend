@@ -1,5 +1,6 @@
 import os
 
+
 class Config:
 
     DATABASE_URL = os.getenv("DATABASE_URL")
@@ -9,3 +10,48 @@ class Config:
     PARALLEL_MARKET_A_URL = os.getenv("MARKET_DATA_PROVIDER_A_URL")
 
     PARALLEL_MARKET_B_URL = os.getenv("MARKET_DATA_PROVIDER_B_URL")
+
+    # Variables de entorno requeridas para arrancar la app.
+    # (nombre_de_variable, requiere_esquema_http)
+    _REQUIRED_ENV = (
+        ("DATABASE_URL", False),
+        ("OFFICIAL_MARKET_DATA_PROVIDER_URL", True),
+        ("MARKET_DATA_PROVIDER_A_URL", True),
+        ("MARKET_DATA_PROVIDER_B_URL", True),
+    )
+
+    @classmethod
+    def validate(cls):
+        """Valida (fail-fast) que las variables de entorno requeridas existan.
+
+        Se ejecuta al arrancar la app. Lanza ``EnvironmentError`` con un mensaje
+        que **nombra** la variable faltante o mal formada, en lugar del error
+        críptico de httpx ("Request URL is missing an 'http://' ... protocol.")
+        que aparecería tarde, en cada request, al construirse URLs como
+        ``"None/..."``.
+
+        No expone el valor de las variables (solo el nombre) para no filtrar
+        secretos.
+        """
+        missing = []
+        invalid_scheme = []
+        for name, needs_http in cls._REQUIRED_ENV:
+            value = os.getenv(name)
+            if not value or not value.strip():
+                missing.append(name)
+            elif needs_http and not value.strip().lower().startswith(("http://", "https://")):
+                invalid_scheme.append(name)
+
+        errors = []
+        if missing:
+            errors.append(
+                "Faltan variables de entorno requeridas (defínelas en .env): "
+                + ", ".join(missing)
+            )
+        if invalid_scheme:
+            errors.append(
+                "Estas variables de entorno deben incluir el esquema http:// o https://: "
+                + ", ".join(invalid_scheme)
+            )
+        if errors:
+            raise EnvironmentError(" | ".join(errors))
