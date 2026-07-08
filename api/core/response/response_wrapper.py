@@ -12,3 +12,17 @@ def api_response(data=None, detail=c.STATUS_OK_MSG, message=c.STATUS_OK_DEATILS,
         status_code=status_code,
         content=content
     )
+
+def error_response(message, status=c.STATUS_ERROR_MSG, status_code=c.STATUS_INTERNAL_SERVER_ERROR):
+    """Arma el envelope de error estándar (`ErrorResponse`): {status, message}.
+
+    Mantiene la forma consistente con `api_response` para que el frontend
+    consuma errores y éxitos con el mismo esquema base.
+    """
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status,
+            "message": message,
+        }
+    )

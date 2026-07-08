@@ -73,6 +73,17 @@ try:
     app.include_router(docs_router)  # Inyectamos el router de documentación
     app.include_router(health_router) # Inyectamos el router de monitoreo
 
+    from fastapi import Request
+    from api.core.errors.exceptions import ExternalSourceError
+    from api.core.response.response_wrapper import error_response
+
+    @app.exception_handler(ExternalSourceError)
+    async def external_source_error_handler(request: Request, exc: ExternalSourceError):
+        # Traduce el fallo de una fuente externa (BCV, Yadio, Binance) al código
+        # HTTP semántico (408 timeout / 502 fuente caída) usando el envelope de
+        # error estándar, en lugar de un 200 con datos vacíos o un 500 confuso.
+        return error_response(message=exc.message, status_code=exc.status_code)
+
     @app.get("/", response_class=HTMLResponse, tags=["Root"], summary="Página de bienvenida", include_in_schema=False)
     def root():
         # Pasamos dinámicamente el nombre y la versión desde las constantes

@@ -50,9 +50,27 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     STATUS_NOT_FOUND_MSG = 'Not Found'
 
+    STATUS_REQUEST_TIMEOUT = 408
+
+    STATUS_REQUEST_TIMEOUT_MSG = 'Request Timeout'
+
+    STATUS_BAD_GATEWAY = 502
+
+    STATUS_BAD_GATEWAY_MSG = 'Bad Gateway'
+
     STATUS_INTERNAL_SERVER_ERROR = 500
 
     STATUS_INTERNAL_SERVER_ERROR_MSG = 'Internal Server Error'
+
+    STATUS_ERROR_MSG = 'Error'
+
+    # Mensajes de fallo de las fuentes externas de tasas (BCV, Yadio, Binance).
+    # {source} se rellena con el nombre de la plataforma afectada.
+    SOURCE_TIMEOUT_MSG = 'Tiempo de espera agotado al consultar la fuente: {source}.'
+
+    SOURCE_UNAVAILABLE_MSG = 'La fuente {source} no está disponible o respondió con un error.'
+
+    SOURCE_PARSING_MSG = 'No se pudo interpretar la respuesta de la fuente: {source}.'
 
     BCV_NAME = 'Banco Central de Venezuela'
     

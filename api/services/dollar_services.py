@@ -5,6 +5,7 @@ import asyncio
 from typing import Optional, List
 
 from api.core.client.http_client import HttpClient
+from api.core.errors.exceptions import source_guard
 from api.models.bd_currency import Currency
 from api.services.bd_service import save_currencies_to_db, save_platform_date, get_platform_date, SessionLocal
 from api.utils.constants.constants import Constants as c
@@ -19,25 +20,26 @@ class DollarService:
         self.helper = Helper()
 
     async def getDollarValueByBCV(self):
-        content = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
-        soup = BeautifulSoup(content, c.F_HTML)
-        soup_target=soup.findAll(id=tag.ID_DOLAR)
-        item = soup_target[0]
-        getCode, getCurrency, getName  = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
-        currency = self.createCurrency(getCode.text, getName, self.helper.formatCuValue(getCurrency.text))
-        return self.serialize_with_image(currency)
-    
+        with source_guard(c.BCV_NAME):
+            content = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
+            soup = BeautifulSoup(content, c.F_HTML)
+            soup_target=soup.findAll(id=tag.ID_DOLAR)
+            item = soup_target[0]
+            getCode, getCurrency, getName  = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
+            currency = self.createCurrency(getCode.text, getName, self.helper.formatCuValue(getCurrency.text))
+            return self.serialize_with_image(currency)
+
     async def getCurrenciesByBCV(self):
-        try: 
+        with source_guard(c.BCV_NAME):
             url = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
             elements = []
             soup = BeautifulSoup(url, c.F_HTML)
             date_elements = soup.findAll(class_=tag.CLASS_DATE)
             # Extraemos el string de la fecha de forma segura
             date_str = date_elements[0].attrs.get(tag.KEY_DATE) if date_elements else None
-            
+
             currencies = soup.findAll(class_=tag.CLASS_CURRENCY)
-            for item in currencies: 
+            for item in currencies:
                 getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
                 elements.append(
                     self.createCurrency(
@@ -46,50 +48,49 @@ class DollarService:
                         self.helper.formatCuValue(getCurrency.text)
                     )
                 )
-            
+
             # Guardamos en base de datos
             #save_currencies_to_db(elements)
-            
+
             # Convertimos los objetos Currency a diccionarios serializables para JSON
             serialized_currencies = [self.serialize_with_image(e) for e in elements]
-            
+
             return {"date": date_str, "currencies": serialized_currencies}
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return []
 
     async def getCurrenciesByYadio(self):
-        response = await self.client.get(endpoints.getParMktExRate("VES"))
-        currencies = [ self.createCurrency(
-                "USD",
-                "Dolar",
-                response["VES"]["VES"] / response["VES"]["USD"],
-                c.YADIO_NAME
-            ),
-            self.createCurrency(
-                "EUR",
-                "Euro",
-                response["VES"]["VES"] / response["VES"]["EUR"],
-                c.YADIO_NAME
-            ),
-            self.createCurrency(
-                "BTC",
-                "Bitcoin",
-                response["BTC"],
-                c.YADIO_NAME
-            )
-        ]
-        return [self.serialize_with_image(cur) for cur in currencies]
-        
+        with source_guard(c.YADIO_NAME):
+            response = await self.client.get(endpoints.getParMktExRate("VES"))
+            currencies = [ self.createCurrency(
+                    "USD",
+                    "Dolar",
+                    response["VES"]["VES"] / response["VES"]["USD"],
+                    c.YADIO_NAME
+                ),
+                self.createCurrency(
+                    "EUR",
+                    "Euro",
+                    response["VES"]["VES"] / response["VES"]["EUR"],
+                    c.YADIO_NAME
+                ),
+                self.createCurrency(
+                    "BTC",
+                    "Bitcoin",
+                    response["BTC"],
+                    c.YADIO_NAME
+                )
+            ]
+            return [self.serialize_with_image(cur) for cur in currencies]
+
     async def getDollarByYadio(self):
-        response = await self.client.get(endpoints.getParMktRate("VES", "USD"))
-        currency = self.createCurrency(
-                "USD",
-                "Dolar",
-                response["rate"],
-                c.YADIO_NAME
-            )
-        return self.serialize_with_image(currency)
+        with source_guard(c.YADIO_NAME):
+            response = await self.client.get(endpoints.getParMktRate("VES", "USD"))
+            currency = self.createCurrency(
+                    "USD",
+                    "Dolar",
+                    response["rate"],
+                    c.YADIO_NAME
+                )
+            return self.serialize_with_image(currency)
     
     async def getCurrenciesByBinance(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
         dataPayload = {
@@ -105,19 +106,20 @@ class DollarService:
             "User-Agent": "Mozilla/5.0",
             "Content-Type": "application/json"
         }
-        response = await self.client.post(endpoints.getParMktP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
-        advisors = response["data"]
-        prices = []
-        for advisor in advisors:
-            prices.append(float(advisor["adv"]["price"]))
-        average = sum(prices) / len(prices)
+        with source_guard(c.BINANCE_NAME):
+            response = await self.client.post(endpoints.getParMktP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
+            advisors = response["data"]
+            prices = []
+            for advisor in advisors:
+                prices.append(float(advisor["adv"]["price"]))
+            average = sum(prices) / len(prices)
 
-        return self.createCurrency(
-            asset,
-            "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
-            average,
-            c.BINANCE_NAME
-        )
+            return self.createCurrency(
+                asset,
+                "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
+                average,
+                c.BINANCE_NAME
+            )
         
     async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
         session = SessionLocal()
@@ -154,16 +156,16 @@ class DollarService:
     
     async def get_raw_bcv_currencies(self) -> List[Currency]:
         """Obtiene las tasas del BCV y devuelve una lista de objetos Currency sin serializar."""
-        try:
+        with source_guard(c.BCV_NAME):
             url = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
             elements = []
             soup = BeautifulSoup(url, c.F_HTML)
-            
+
             date_elements = soup.findAll(class_=tag.CLASS_DATE)
             date_str = date_elements[0].attrs.get(tag.KEY_DATE) if date_elements else None
 
             currencies_soup = soup.findAll(class_=tag.CLASS_CURRENCY)
-            for item in currencies_soup: 
+            for item in currencies_soup:
                 getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
                 elements.append(
                     self.createCurrency(
@@ -173,13 +175,10 @@ class DollarService:
                     )
                 )
             return {"date": date_str, "currencies": elements}
-        except Exception as e:
-            print(f"Error fetching raw BCV currencies: {e}")
-            return []
 
     async def get_raw_yadio_currencies(self) -> List[Currency]:
         """Obtiene las tasas de Yadio y devuelve una lista de objetos Currency sin serializar."""
-        try:
+        with source_guard(c.YADIO_NAME):
             response = await self.client.get(endpoints.getParMktExRate("VES"))
             currencies = [
                 self.createCurrency("USD", "Dolar", response["VES"]["VES"] / response["VES"]["USD"], c.YADIO_NAME),
@@ -187,13 +186,10 @@ class DollarService:
                 self.createCurrency("BTC", "Bitcoin", response["BTC"], c.YADIO_NAME)
             ]
             return currencies
-        except Exception as e:
-            print(f"Error fetching raw Yadio currencies: {e}")
-            return []
 
     async def get_raw_binance_currencies(self) -> List[Currency]:
         """Obtiene las 4 tasas de Binance (USDT/USDC Buy/Sell) y devuelve una lista de objetos Currency."""
-        try:
+        with source_guard(c.BINANCE_NAME):
             async with httpx.AsyncClient() as client:
                 tasks = [
                     self.getCurrenciesByBinance(client, "USDT", "VES", "Buy"),
@@ -203,9 +199,6 @@ class DollarService:
                 ]
                 binance_currencies = await asyncio.gather(*tasks)
                 return list(binance_currencies)
-        except Exception as e:
-            print(f"Error fetching raw Binance currencies: {e}")
-            return []
 
     async def save_currencies_to_db_async(self, currencies: List[Currency]):
         """Guarda una lista de monedas en la base de datos de forma asíncrona."""
