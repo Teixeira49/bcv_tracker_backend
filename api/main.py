@@ -74,6 +74,7 @@ try:
     app.include_router(health_router) # Inyectamos el router de monitoreo
 
     from fastapi import Request
+    from starlette.exceptions import HTTPException as StarletteHTTPException
     from api.core.errors.exceptions import ExternalSourceError
     from api.core.response.response_wrapper import error_response
 
@@ -83,6 +84,27 @@ try:
         # HTTP semántico (408 timeout / 502 fuente caída) usando el envelope de
         # error estándar, en lugar de un 200 con datos vacíos o un 500 confuso.
         return error_response(message=exc.message, status_code=exc.status_code)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+        # Renderiza CUALQUIER HTTPException (400, 404, el 500 de los controllers,
+        # etc.) con el mismo envelope `ErrorResponse` {status, message} que el
+        # resto de la API, en lugar del `{"detail": ...}` por defecto de FastAPI.
+        # Así el shape documentado en `responses={}` coincide con el real y el
+        # frontend consume errores y éxitos con el mismo esquema.
+        return error_response(message=str(exc.detail), status_code=exc.status_code)
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        # Red de seguridad: cualquier excepción no controlada colapsa a un 500
+        # uniforme. Se registra el traceback en el servidor (no se pierde la
+        # información) pero al cliente solo se le devuelve un mensaje genérico,
+        # sin filtrar detalles internos.
+        traceback.print_exc()
+        return error_response(
+            message=c.INTERNAL_ERROR_MSG,
+            status_code=c.STATUS_INTERNAL_SERVER_ERROR,
+        )
 
     @app.get("/", response_class=HTMLResponse, tags=["Root"], summary="Página de bienvenida", include_in_schema=False)
     def root():
