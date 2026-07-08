@@ -6,6 +6,7 @@ from typing import List
 from api.models.schemas import BaseResponse, CurrencySchema, BcvResponseData, AllCurrenciesResponseData, UpdateCurrenciesResponseData, ErrorResponse
 
 from api.core.response.response_wrapper import api_response
+from api.core.errors.exceptions import ExternalSourceError
 from api.services.dollar_services import DollarService
 from api.utils.constants.constants import Constants as c
 
@@ -30,6 +31,7 @@ class FilterParams:
     responses={
         200: {"model": BaseResponse[AllCurrenciesResponseData], "description": "Tasas de cambio obtenidas exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar las fuentes externas"},
+        502: {"model": ErrorResponse, "description": "Una de las fuentes externas no está disponible o respondió con un error"},
         500: {"model": ErrorResponse, "description": "Error al consultar las fuentes externas"}
     }
 )
@@ -70,6 +72,8 @@ async def get_all_currencies(averaged: bool = Query(False)):
             "yadio": yadio_res,
             "binance": binance_data
         })
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -83,6 +87,7 @@ async def get_all_currencies(averaged: bool = Query(False)):
     responses={
         200: {"model": BaseResponse[BcvResponseData], "description": "Tasas oficiales del BCV obtenidas exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al intentar acceder al portal del BCV"},
+        502: {"model": ErrorResponse, "description": "El portal del BCV no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al realizar scraping del portal del BCV"}
     }
 )
@@ -90,6 +95,8 @@ async def get_bcv_currencies():
     try:
         exchange_rate = await dollar_service.getCurrenciesByBCV()
         return api_response(exchange_rate)
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -103,6 +110,7 @@ async def get_bcv_currencies():
     responses={
         200: {"model": BaseResponse[BcvResponseData], "description": "Tasas del BCV recuperadas exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar los datos del BCV"},
+        502: {"model": ErrorResponse, "description": "El portal del BCV no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al recuperar datos de la BD o del portal"}
     }
 )
@@ -112,6 +120,8 @@ async def get_bcv_with_memory(update: bool = Query(False)):
             return api_response(await dollar_service.getCurrenciesByBCV())
         else:
             return api_response(await dollar_service.get_stored_bcv_data())
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -125,6 +135,7 @@ async def get_bcv_with_memory(update: bool = Query(False)):
     responses={
         200: {"model": BaseResponse[CurrencySchema], "description": "Tasa del dólar BCV obtenida exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar el valor del dólar BCV"},
+        502: {"model": ErrorResponse, "description": "El portal del BCV no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al obtener el valor del dólar"}
     }
 )
@@ -132,6 +143,8 @@ async def get_bcv_dollar():
     try:
         exchange_rate = await dollar_service.getDollarValueByBCV()
         return api_response(exchange_rate)
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -145,6 +158,7 @@ async def get_bcv_dollar():
     responses={
         200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas de Yadio.io obtenidas exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar el API de Yadio.io"},
+        502: {"model": ErrorResponse, "description": "La API de Yadio.io no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al conectar con la API de Yadio.io"}
     }
 )
@@ -152,6 +166,8 @@ async def get_yadio_currencies():
     try:
         exchange_rate = await dollar_service.getCurrenciesByYadio()
         return api_response(exchange_rate)
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -165,6 +181,7 @@ async def get_yadio_currencies():
     responses={
         200: {"model": BaseResponse[CurrencySchema], "description": "Tasa del dólar paralelo obtenida exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar el dólar en Yadio.io"},
+        502: {"model": ErrorResponse, "description": "La API de Yadio.io no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al consultar el dólar en Yadio.io"}
     }
 )
@@ -172,6 +189,8 @@ async def get_yadio_dollar():
     try:
         exchange_rate = await dollar_service.getDollarByYadio()
         return api_response(exchange_rate)
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -185,6 +204,7 @@ async def get_yadio_dollar():
     responses={
         200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas de Binance P2P obtenidas exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar Binance P2P"},
+        502: {"model": ErrorResponse, "description": "La API de Binance P2P no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al consultar la API de Binance P2P"}
     }
 )
@@ -209,6 +229,8 @@ async def get_binance_currencies():
             dollar_service.serialize_with_image(usdt_sell),
             dollar_service.serialize_with_image(usdc_sell)
         ])
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -222,6 +244,7 @@ async def get_binance_currencies():
     responses={
         200: {"model": BaseResponse[List[CurrencySchema]], "description": "Promedios de Binance P2P obtenidos exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al promediar tasas de Binance"},
+        502: {"model": ErrorResponse, "description": "La API de Binance P2P no está disponible o su respuesta no pudo interpretarse"},
         500: {"model": ErrorResponse, "description": "Error al calcular promedios de Binance"}
     }
 )
@@ -253,6 +276,8 @@ async def get_binance_averaged():
             dollar_service.serialize_with_image(tether_averaged),
             dollar_service.serialize_with_image(usdc_averaged)
         ])
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -272,6 +297,7 @@ async def get_binance_averaged():
         200: {"model": BaseResponse[UpdateCurrenciesResponseData], "description": "Base de datos actualizada correctamente"},
         400: {"model": ErrorResponse, "description": "No se seleccionó ninguna fuente de datos"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado durante la actualización masiva"},
+        502: {"model": ErrorResponse, "description": "Alguna de las fuentes seleccionadas no está disponible o respondió con un error"},
         500: {"model": ErrorResponse, "description": "Error durante el proceso de actualización y guardado"}
     }
 )
@@ -327,6 +353,8 @@ async def update_currencies(
 
         result = await dollar_service.save_currencies_to_db_async(all_currencies)
         return api_response(result)
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ocurrió un error durante la actualización: {str(e)}")
     
@@ -341,6 +369,7 @@ async def update_currencies(
     responses={
         200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas históricas/guardadas recuperadas exitosamente"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al recuperar datos de la base de datos"},
+        502: {"model": ErrorResponse, "description": "Una fuente en vivo (fill_missing) no está disponible o respondió con un error"},
         500: {"model": ErrorResponse, "description": "Error al recuperar datos históricos"}
     }
 )
@@ -415,5 +444,7 @@ async def get_saved_currencies(
             final_results.append(item)
 
         return api_response(final_results)
+    except ExternalSourceError:
+        raise  # Traducida a 408/502 por el handler global de main.py
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
