@@ -72,6 +72,8 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     SOURCE_PARSING_MSG = 'No se pudo interpretar la respuesta de la fuente: {source}.'
 
+    SOURCE_EMPTY_MSG = 'La fuente {source} no devolvió ofertas disponibles.'
+
     BCV_NAME = 'Banco Central de Venezuela'
     
     BCV_LOGO_URL = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSOo4msUmPyGaYEjUT2wXmHvhFTAmM-5k9NbQ&s'
