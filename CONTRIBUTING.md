@@ -55,6 +55,34 @@ Para mantener la calidad del código, sigue estas reglas:
 
 ---
 
+## 🏷️ Versionado y Changelog
+
+El proyecto sigue **[Semantic Versioning](https://semver.org/lang/es/)** (`MAJOR.MINOR.PATCH`, con tags `vX.Y.Z`) y mantiene un historial formal en [`CHANGELOG.md`](CHANGELOG.md) con el formato **[Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)**.
+
+### Cómo elegir el incremento (SemVer)
+
+| Cambio predominante | Parte que sube | Ejemplo |
+|---|---|---|
+| Breaking change (`!` o footer `BREAKING CHANGE:`) | **MAJOR** | `v1.1.1` → `v2.0.0` |
+| `feat` (nueva funcionalidad no-breaking) | **MINOR** | `v1.1.1` → `v1.2.0` |
+| `fix`, `perf`, `refactor`, `docs`, `build`, `chore`… | **PATCH** | `v1.1.1` → `v1.1.2` |
+
+El `type` predominante de tus commits (ver arriba) determina el incremento.
+
+### Proceso para actualizar el changelog en cada release
+
+El changelog **no se edita a mano en cada commit**: se actualiza al **lanzar una versión**, a partir de un **PR ya aprobado y mergeado**. Por cada release:
+
+1. Se determina la versión nueva según la tabla SemVer de arriba.
+2. Se escribe la nota de release detallada en `docs/release/RELEASE_v<X.Y.Z>.md`.
+3. Se agrega una entrada **concisa** al tope de `CHANGELOG.md` (orden descendente, la más reciente primero) con la fecha de merge y solo las subsecciones que apliquen (`Added`, `Changed`, `Fixed`, `Removed`, `Deprecated`, `Security`).
+4. Se mantienen los enlaces de comparación por versión al final del archivo (`[X.Y.Z]: .../compare/vA.B.C...vX.Y.Z`).
+5. Se crea el **GitHub Release** con el tag `vX.Y.Z` sobre `main`.
+
+El detalle completo de este flujo (con los gates de confirmación) vive en la convención del repositorio [`.agents/rules/release-versioning.md`](.agents/rules/release-versioning.md). El `CHANGELOG.md` es el resumen navegable; la nota en `docs/release/` es el documento extenso, y ambos deben ser consistentes con lo que el PR realmente cambió.
+
+---
+
 ## 🚀 Nuevas Fuentes de Datos
 
 Si deseas agregar un nuevo monitor de divisas:
