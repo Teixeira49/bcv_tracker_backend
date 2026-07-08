@@ -64,6 +64,11 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     STATUS_ERROR_MSG = 'Error'
 
+    # Mensaje genérico para errores internos no controlados (500). No expone
+    # `str(exc)` al cliente para no filtrar detalles internos; el detalle real
+    # se registra en el servidor.
+    INTERNAL_ERROR_MSG = 'Ocurrió un error interno inesperado al procesar la solicitud.'
+
     # Mensajes de fallo de las fuentes externas de tasas (BCV, Yadio, Binance).
     # {source} se rellena con el nombre de la plataforma afectada.
     SOURCE_TIMEOUT_MSG = 'Tiempo de espera agotado al consultar la fuente: {source}.'
