@@ -28,6 +28,7 @@ class AllCurrenciesResponseData(BaseModel):
     yadio: List[CurrencySchema]
     binance: List[CurrencySchema]
     bybit: List[CurrencySchema]
+    exchange_monitor: List[CurrencySchema]
 
 class UpdateCurrenciesResponseData(BaseModel):
     message: str
