@@ -26,7 +26,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
         "url": "https://github.com/Teixeira49",
     }
 
-    VERSION = "1.1.1"
+    VERSION = "2.0.0"
 
     # Prefijo de versión del contrato de la API (versionado por path). Es
     # independiente de VERSION (versión semántica de la app / metadata OpenAPI):
