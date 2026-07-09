@@ -5,6 +5,27 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y el proyecto sigue [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.0.0] - 2026-07-08
+
+_The Hardening & Versioning Update. Detalle completo en [`docs/release/RELEASE_v2.0.0.md`](docs/release/RELEASE_v2.0.0.md)._
+
+### Added
+- Versionado de los endpoints de negocio bajo el prefijo `/api/v1` (DT-008).
+- Sobre de error uniforme con códigos tipados para todas las respuestas de error de la API (DT-007).
+- Validación de variables de entorno requeridas al arranque, con fallo temprano y claro (DT-004).
+- Proceso formal de CHANGELOG y versionado SemVer (DT-002).
+- Versionado del tooling agéntico del repo: skills, rules y roles (DT-001).
+- Control de despliegues en Vercel (allowlist `preview`/`main`) y flujo de promoción staged.
+- Pruebas: caso de respuesta P2P vacía de Binance (DT-006) y sobre de error uniforme (DT-007).
+
+### Changed
+- **BREAKING**: los endpoints de negocio se movieron bajo `/api/v1`; los consumidores deben actualizar sus URLs (DT-008).
+- `HttpClient` migrado a `httpx` asíncrono real; timeout HTTP extraído a `Constants` (DT-003).
+
+### Fixed
+- El scraper lanza errores tipados ante fallo de la fuente en vez de devolver una lista vacía con `200` (DT-005).
+- Evitado `ZeroDivisionError` al promediar ofertas de Binance P2P validándolas antes (DT-006).
+
 ## [1.1.1] - 2026-04-15
 
 _The Professionalization Update. Detalle completo en [`docs/release/RELEASE_v1.1.1.md`](docs/release/RELEASE_v1.1.1.md)._
@@ -68,6 +89,7 @@ _The Professionalization Update. Detalle completo en [`docs/release/RELEASE_v1.1
 - Manejo de errores en la importación del router.
 - Simplificación de la lógica de comparación de fechas.
 
+[2.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v0.5.0...v1.0.0
