@@ -101,7 +101,10 @@ Las principales librerías utilizadas en este proyecto son:
    ```
 
 4. **Configurar variables de entorno**:
-   Crea un archivo `.env` en la raíz con **todas** las variables requeridas. Si falta alguna, la app aborta al arrancar con un mensaje que nombra la variable faltante.
+   Copia la plantilla `.env.example` a `.env` y rellena los valores. La app valida **todas** las variables requeridas al arrancar; si falta alguna, aborta con un mensaje que nombra la variable faltante.
+   ```bash
+   cp .env.example .env
+   ```
    ```env
    # Base de datos (PostgreSQL)
    DATABASE_URL=postgresql://usuario:password@localhost:5432/nombre_db
@@ -113,7 +116,7 @@ Las principales librerías utilizadas en este proyecto son:
    MARKET_DATA_PROVIDER_C_URL=https://api2.bybit.com            # Bybit P2P
    MARKET_DATA_PROVIDER_D_URL=https://exchangemonitor.net       # Exchange Monitor
    ```
-   > Los valores de las URLs son ejemplos de los proveedores públicos usados por el proyecto; ajústalos según tu entorno. El `.env` está en `.gitignore` y nunca se versiona.
+   > Los valores de las URLs son ejemplos de los proveedores públicos usados por el proyecto; ajústalos según tu entorno. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 
 5. **Ejecutar migraciones**:
    ```bash
