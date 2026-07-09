@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from api.utils.constants.constants import Constants as c
@@ -21,7 +23,7 @@ class HttpClient:
 
     async def get(self, url, params=None, headers=None, client=None):
         response = await self._send("GET", url, client=client, params=params, headers=headers)
-        return response.json()
+        return self._parse_json(response)
 
     async def get_content(self, url, params=None, headers=None, verify=None, client=None):
         response = await self._send(
@@ -31,19 +33,19 @@ class HttpClient:
 
     async def post(self, url, data=None, headers=None, client=None):
         response = await self._send("POST", url, client=client, headers=headers, data=data)
-        return response.json()
+        return self._parse_json(response)
 
     async def put(self, url, data=None, headers=None, client=None):
         response = await self._send("PUT", url, client=client, headers=headers, data=data)
-        return response.json()
+        return self._parse_json(response)
 
     async def delete(self, url, data=None, headers=None, client=None):
         response = await self._send("DELETE", url, client=client, headers=headers, data=data)
-        return response.json()
+        return self._parse_json(response)
 
     async def patch(self, url, data=None, headers=None, client=None):
         response = await self._send("PATCH", url, client=client, headers=headers, data=data)
-        return response.json()
+        return self._parse_json(response)
 
     async def _send(self, method, url, *, client=None, params=None, headers=None, data=None, verify=None):
         request_kwargs = {
@@ -65,6 +67,19 @@ class HttpClient:
 
         response.raise_for_status()
         return response
+
+    @staticmethod
+    def _parse_json(response):
+        """Parsea el cuerpo como JSON tolerando caracteres de control crudos.
+
+        Algunas fuentes P2P (p. ej. Bybit) devuelven anuncios cuyo texto libre
+        incluye saltos de línea/tabs **sin escapar** dentro de las cadenas JSON.
+        El parseo estricto de ``response.json()`` (json.loads con ``strict=True``)
+        lanzaría ``JSONDecodeError`` ante esos caracteres, tumbando la fuente de
+        forma intermitente. Con ``strict=False`` se permiten dentro de strings;
+        el JSON bien formado se interpreta de forma idéntica.
+        """
+        return json.loads(response.text, strict=False)
 
     @staticmethod
     def _body_kwargs(data):
