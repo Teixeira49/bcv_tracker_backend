@@ -12,8 +12,16 @@ venv/
 # Logs and others
 git_history.txt
 
-# Esquema semántico interno de la BD (no se sube a producción/público)
+# Documentación interna (NO se versiona).
+# Sí se versionan: docs/DEPLOYMENT.md y docs/release/.
+# - docs/schema/: esquema semántico interno de la BD
+# - docs/PENDIENTES.md: notas de planificación / roadmap interno
+# - docs/pull-requests/: borradores de PR (el PR canónico vive en GitHub)
+# - docs/research/: investigación interna (playbook de integraciones)
 docs/schema/
+docs/PENDIENTES.md
+docs/pull-requests/
+docs/research/
 
 # Tooling agéntico (skills / rules / roles)
 # SÍ se versiona: .agents/, .claude/pr-config.json y skills-lock.json
