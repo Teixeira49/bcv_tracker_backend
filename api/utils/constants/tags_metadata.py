@@ -1,7 +1,7 @@
 tags_metadata = [
     {
         "name": "Venezuela",
-        "description": "Endpoints para consulta en tiempo real de tasas cambiarias (BCV, Yadio, Binance).",
+        "description": "Endpoints para consulta en tiempo real de tasas cambiarias (BCV, Yadio, Binance, Bybit, Exchange Monitor).",
     },
     {
         "name": "Venezuela | Save Data",

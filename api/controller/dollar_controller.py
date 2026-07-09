@@ -27,7 +27,7 @@ class FilterParams:
 @router.get(
     '',
     summary="Obtiene todas las tasas de cambio de múltiples fuentes en tiempo real",
-    description="Realiza peticiones concurrentes a las fuentes del Banco Central de Venezuela (BCV), Yadio.io, Binance P2P y Bybit P2P para retornar las tasas de cambio vigentes para diversas monedas (USD, EUR, USDT, USDC). Permite promediar los valores de Binance y Bybit mediante el parámetro `averaged`.",
+    description="Realiza peticiones concurrentes a las fuentes del Banco Central de Venezuela (BCV), Yadio.io, Binance P2P, Bybit P2P y Exchange Monitor para retornar las tasas de cambio vigentes para diversas monedas (USD, EUR, USDT, USDC). Permite promediar los valores de Binance y Bybit mediante el parámetro `averaged`.",
     response_model=BaseResponse[AllCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Tasas de cambio obtenidas exitosamente",
@@ -39,12 +39,15 @@ class FilterParams:
     }
 )
 async def get_all_currencies(averaged: bool = Query(False)):
-    # Iniciamos las tareas de BCV, Yadio y Bybit
+    # Iniciamos las tareas de BCV, Yadio, Bybit y Exchange Monitor
     bcv_task = dollar_service.getCurrenciesByBCV()
     yadio_task = dollar_service.getCurrenciesByYadio()
     # Bybit gestiona su propia degradación (omite pares sin ofertas); solo lanza
     # 502 si TODOS sus pares vienen vacíos, igual que Binance ante fallo total.
     bybit_task = dollar_service.get_raw_bybit_currencies()
+    # Exchange Monitor abre su propio cliente HTTP (flujo CSRF + JSON); en vivo
+    # devuelve todos los mercados que reporta (valor propio + promedio + resto).
+    exchange_monitor_task = dollar_service.getCurrenciesByExchangeMonitor()
 
     async with httpx.AsyncClient() as client:
         # Preparamos las 4 tareas de Binance (necesarias para ambos casos)
@@ -53,9 +56,9 @@ async def get_all_currencies(averaged: bool = Query(False)):
         task_usdt_sell = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Sell")
         task_usdc_sell = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Sell")
 
-        # Ejecutamos TODO en paralelo (7 tareas concurrentes)
-        bcv_res, yadio_res, bybit_raw, usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
-            bcv_task, yadio_task, bybit_task, task_usdt_buy, task_usdc_buy, task_usdt_sell, task_usdc_sell
+        # Ejecutamos TODO en paralelo (8 tareas concurrentes)
+        bcv_res, yadio_res, bybit_raw, em_res, usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
+            bcv_task, yadio_task, bybit_task, exchange_monitor_task, task_usdt_buy, task_usdc_buy, task_usdt_sell, task_usdc_sell
         )
 
     # Procesamos la lógica de Binance según el parámetro
@@ -81,7 +84,8 @@ async def get_all_currencies(averaged: bool = Query(False)):
         "bcv": bcv_res['currencies'],
         "yadio": yadio_res,
         "binance": binance_data,
-        "bybit": bybit_data
+        "bybit": bybit_data,
+        "exchange_monitor": em_res['currencies']
     })
 
 @router.get(
@@ -290,6 +294,24 @@ async def get_bybit_averaged():
     averaged = dollar_service.average_by_asset(currencies, c.BYBIT_NAME)
     return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
 
+@router.get(
+    "/exchange-monitor",
+    summary="Obtiene las tasas que reporta Exchange Monitor (valor propio, promedio y mercados)",
+    description="Obtiene por scraping las tasas de Exchange Monitor para Venezuela: su valor propio, el promedio estimado y los distintos mercados que agrega (BCV, Monitor Dólar, etc.), con la fecha de actualización del sitio. Como el sitio renderiza las tasas por JavaScript, se resuelve mediante un flujo híbrido (token CSRF del HTML + endpoint de datos JSON).",
+    response_model=BaseResponse[BcvResponseData],
+    status_code=status.HTTP_200_OK,
+    response_description="Tasas de Exchange Monitor obtenidas exitosamente",
+    responses={
+        200: {"model": BaseResponse[BcvResponseData], "description": "Tasas de Exchange Monitor obtenidas exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar Exchange Monitor"},
+        502: {"model": ErrorResponse, "description": "Exchange Monitor no está disponible o su respuesta no pudo interpretarse"},
+        500: {"model": ErrorResponse, "description": "Error al realizar scraping de Exchange Monitor"}
+    }
+)
+async def get_exchange_monitor_currencies():
+    exchange_rate = await dollar_service.getCurrenciesByExchangeMonitor()
+    return api_response(exchange_rate)
+
 # ============================================================================================
 #  >> Usar informacion de memoria sobre los mercados
 # --------------------------------------------------------------------------------------------
@@ -298,7 +320,7 @@ async def get_bybit_averaged():
     "/update-currencies", 
     tags=["Venezuela | Save Data"], 
     summary="Actualiza y persiste las tasas de cambio en la base de datos",
-    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma.",
+    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit, Exchange Monitor). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma. De Exchange Monitor se persisten su valor propio y el promedio estimado.",
     response_model=BaseResponse[UpdateCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Base de datos actualizada correctamente",
@@ -314,16 +336,17 @@ async def update_currencies(
     bcv: bool = Query(True, description="Incluir y guardar tasas del BCV."),
     yadio: bool = Query(True, description="Incluir y guardar tasas de Yadio.io."),
     binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P."),
-    bybit: bool = Query(True, description="Incluir y guardar tasas de Bybit P2P.")
+    bybit: bool = Query(True, description="Incluir y guardar tasas de Bybit P2P."),
+    exchange_monitor: bool = Query(True, description="Incluir y guardar el valor propio y el promedio de Exchange Monitor.")
 ):
     """
-    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance, bybit)
+    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance, bybit, exchange_monitor)
     y actualiza los registros correspondientes en la base de datos.
     """
-    if not any([bcv, yadio, binance, bybit]):
+    if not any([bcv, yadio, binance, bybit, exchange_monitor]):
         raise HTTPException(
             status_code=400,
-            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit."
+            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit, exchange_monitor."
         )
 
     tasks = []
@@ -335,6 +358,8 @@ async def update_currencies(
         tasks.append(dollar_service.get_raw_binance_currencies())
     if bybit:
         tasks.append(dollar_service.get_raw_bybit_currencies())
+    if exchange_monitor:
+        tasks.append(dollar_service.get_raw_exchange_monitor_currencies())
 
     results = await asyncio.gather(*tasks)
 
@@ -363,6 +388,18 @@ async def update_currencies(
         all_currencies.extend(results[result_idx])
         result_idx += 1
 
+    if exchange_monitor:
+        em_res = results[result_idx]
+        result_idx += 1
+        # Como BCV, Exchange Monitor devuelve {date, currencies}: guardamos las
+        # monedas y, si viene, la fecha de actualización de la plataforma.
+        if isinstance(em_res, dict):
+            all_currencies.extend(em_res.get("currencies", []))
+            if em_res.get("date"):
+                await dollar_service.save_platform_date_async(c.EXCHANGE_MONITOR_NAME, em_res["date"])
+        elif isinstance(em_res, list):
+            all_currencies.extend(em_res)
+
     if not all_currencies:
         return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_currencies": 0})
 
@@ -389,6 +426,7 @@ async def get_saved_currencies(
     yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
     binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P."),
     bybit: bool = Query(False, description="Incluir tasas guardadas de Bybit P2P."),
+    exchange_monitor: bool = Query(False, description="Incluir tasas guardadas de Exchange Monitor (valor propio + promedio)."),
     fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
     enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
     enforce_yadio_dollar: bool = Query(False, description="Si es True, filtra resultados de Yadio para mostrar solo el Dólar.")
@@ -422,6 +460,13 @@ async def get_saved_currencies(
         db_platforms.append(c.BYBIT_NAME)
     elif fill_missing:
         live_tasks.append(dollar_service.get_raw_bybit_currencies())
+
+    if exchange_monitor:
+        db_platforms.append(c.EXCHANGE_MONITOR_NAME)
+    elif fill_missing:
+        # En vivo se persisten solo valor propio + promedio (dict {date, currencies}),
+        # que el bloque de abajo aplana igual que BCV.
+        live_tasks.append(dollar_service.get_raw_exchange_monitor_currencies())
 
     results = []
 
