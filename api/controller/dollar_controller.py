@@ -290,6 +290,24 @@ async def get_bybit_averaged():
     averaged = dollar_service.average_by_asset(currencies, c.BYBIT_NAME)
     return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
 
+@router.get(
+    "/airtm",
+    summary="Obtiene las tasas de compra y venta del dólar (USD/VES) según Airtm",
+    description="Consulta el JSON público de tasas de Airtm (rates.airtm.io) para obtener el valor de compra (agregar fondos) y venta (retirar) del dólar en Bolívares (VES).",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Tasas de Airtm obtenidas exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas de Airtm obtenidas exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar Airtm"},
+        502: {"model": ErrorResponse, "description": "La fuente Airtm no está disponible o no devolvió el par USD/VES"},
+        500: {"model": ErrorResponse, "description": "Error al consultar las tasas de Airtm"}
+    }
+)
+async def get_airtm_currencies():
+    exchange_rate = await dollar_service.getCurrenciesByAirtm()
+    return api_response(exchange_rate)
+
 # ============================================================================================
 #  >> Usar informacion de memoria sobre los mercados
 # --------------------------------------------------------------------------------------------

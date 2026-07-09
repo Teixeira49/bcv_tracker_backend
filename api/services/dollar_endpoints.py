@@ -10,6 +10,8 @@ class DollarEndpoints:
 
     PAR_MKT_C = f'{c.PARALLEL_MARKET_C_URL}/'
 
+    PAR_MKT_D = f'{c.PARALLEL_MARKET_D_URL}/'
+
     @classmethod
     def getParMktRate(cls, target: str, base: str):
         return cls.PAR_MKT_B + f"rate/{target}/{base}"
@@ -25,3 +27,8 @@ class DollarEndpoints:
     @classmethod
     def getParMktBybitP2P(cls):
         return cls.PAR_MKT_C + "fiat/otc/item/online"
+
+    @classmethod
+    def getAirtmRates(cls):
+        # Airtm sirve el JSON de tasas en la raíz del host (rates.airtm.io/).
+        return cls.PAR_MKT_D
