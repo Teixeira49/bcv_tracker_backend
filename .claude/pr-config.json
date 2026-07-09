@@ -2,7 +2,7 @@
   "branchProjectCode": "DT",
   "baseBranch": "development",
   "productionBranch": "main",
-  "triggerMode": "manual",
+  "triggerMode": "ask",
   "draftsDir": "docs/pull-requests/",
   "reviewers": []
 }
