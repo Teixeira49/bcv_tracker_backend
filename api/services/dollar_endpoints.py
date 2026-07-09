@@ -12,6 +12,8 @@ class DollarEndpoints:
 
     PAR_MKT_D = f'{c.PARALLEL_MARKET_D_URL}/'
 
+    PAR_MKT_E = f'{c.PARALLEL_MARKET_E_URL}/v3/c2c/'
+
     # Exchange Monitor renderiza las tasas del lado del cliente: la página HTML
     # solo trae el token CSRF; los valores se piden por separado al endpoint de
     # datos (JSON). Guardamos ambos: la página (para el token + cookie de sesión)
@@ -39,3 +41,7 @@ class DollarEndpoints:
     @classmethod
     def getExchangeMonitorData(cls):
         return cls.PAR_MKT_D + "data/rates/ve"
+
+    @classmethod
+    def getOkxP2P(cls):
+        return cls.PAR_MKT_E + "tradingOrders/books"
