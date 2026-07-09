@@ -5,8 +5,9 @@ __pycache__/
 # Virtual Environment
 venv/
 
-# Environment variables
-.env
+# Environment variables (se ignoran todos los .env* salvo la plantilla pública)
+.env*
+!.env.example
 
 # Logs and others
 git_history.txt
@@ -20,3 +21,4 @@ docs/schema/
 .claude/settings.local.json
 .claude/*.local.json
 .mcp.local.json
+.vercel
