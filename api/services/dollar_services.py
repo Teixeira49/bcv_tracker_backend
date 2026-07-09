@@ -126,6 +126,93 @@ class DollarService:
                 c.BINANCE_NAME
             )
         
+    async def getCurrenciesByBybit(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
+        # Bybit expone su P2P público con `side`: "1" = Buy (asks, precio mayor),
+        # "0" = Sell (bids, precio menor). Aceptamos el mismo `tradeType`
+        # ("Buy"/"Sell") que Binance para mantener la simetría del controlador.
+        side = "1" if tradeType == "Buy" else "0"
+        dataPayload = {
+            "tokenId": asset,
+            "currencyId": fiat,
+            "payment": [],
+            "side": side,
+            "size": str(c.PAGE_LIMIT),
+            "page": "1",
+            "amount": ""
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Content-Type": "application/json"
+        }
+        with source_guard(c.BYBIT_NAME):
+            response = await self.client.post(endpoints.getParMktBybitP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
+            items = (response.get("result") or {}).get("items") or []
+            prices = []
+            for item in items:
+                prices.append(float(item["price"]))
+            # Igual que Binance: sin ofertas no hay nada que promediar. Propagamos
+            # un error tipado por par; la degradación (omitir pares vacíos) se
+            # decide arriba, en get_raw_bybit_currencies.
+            if not prices:
+                raise SourceEmptyError(c.BYBIT_NAME)
+            average = sum(prices) / len(prices)
+
+            return self.createCurrency(
+                asset,
+                "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
+                average,
+                c.BYBIT_NAME
+            )
+
+    async def get_raw_bybit_currencies(self) -> List[Currency]:
+        """Obtiene las tasas de Bybit (USDT/USDC Buy/Sell) con degradación elegante.
+
+        A diferencia de Binance (todo-o-nada), el mercado P2P de Bybit en VES
+        puede tener pares sin liquidez (p. ej. USDC/Buy). Omitimos los pares que
+        vengan vacíos (``SourceEmptyError``) y devolvemos los que sí tienen
+        ofertas; solo si **ningún** par tiene datos propagamos
+        ``SourceEmptyError`` (502). Cualquier otro fallo (red, parseo) sí se
+        propaga tal cual, para no enmascarar caídas reales de la fuente.
+        """
+        with source_guard(c.BYBIT_NAME):
+            async with httpx.AsyncClient() as client:
+                tasks = [
+                    self.getCurrenciesByBybit(client, "USDT", "VES", "Buy"),
+                    self.getCurrenciesByBybit(client, "USDC", "VES", "Buy"),
+                    self.getCurrenciesByBybit(client, "USDT", "VES", "Sell"),
+                    self.getCurrenciesByBybit(client, "USDC", "VES", "Sell")
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            currencies = []
+            for res in results:
+                if isinstance(res, SourceEmptyError):
+                    continue  # par sin ofertas: se omite, no tumba la fuente
+                if isinstance(res, BaseException):
+                    raise res  # fallo real (red/parseo/timeout): se propaga
+                currencies.append(res)
+
+            if not currencies:
+                raise SourceEmptyError(c.BYBIT_NAME)
+            return currencies
+
+    def average_by_asset(self, currencies: List[Currency], platform: str) -> List[Currency]:
+        """Promedia por activo las tasas disponibles de una plataforma cripto.
+
+        Agrupa por ``code`` (USDT, USDC) y promedia los valores presentes. Con
+        ambos lados (Buy/Sell) equivale a (compra+venta)/2; si solo hay un lado
+        (par vacío en Bybit), usa el disponible. Devuelve entidades limpias.
+        """
+        groups = {}
+        for cur in currencies:
+            groups.setdefault(cur.code, []).append(cur.value)
+
+        averaged = []
+        for code, values in groups.items():
+            name = "Tether" if code == "USDT" else "USD Coin" if code == "USDC" else code
+            averaged.append(self.createCurrency(code, name, sum(values) / len(values), platform))
+        return averaged
+
     async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
         session = SessionLocal()
         try:
@@ -260,7 +347,8 @@ class DollarService:
         platform_images = {
             c.BCV_NAME: c.BCV_LOGO_URL,
             c.YADIO_NAME: c.YADIO_LOGO_URL,
-            c.BINANCE_NAME: c.BINANCE_LOGO_URL
+            c.BINANCE_NAME: c.BINANCE_LOGO_URL,
+            c.BYBIT_NAME: c.BYBIT_LOGO_URL
         }
         data['platform_img'] = platform_images.get(currency.platform, "")
         return data

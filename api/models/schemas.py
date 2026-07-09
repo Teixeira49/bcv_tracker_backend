@@ -27,6 +27,7 @@ class AllCurrenciesResponseData(BaseModel):
     bcv: List[CurrencySchema]
     yadio: List[CurrencySchema]
     binance: List[CurrencySchema]
+    bybit: List[CurrencySchema]
 
 class UpdateCurrenciesResponseData(BaseModel):
     message: str

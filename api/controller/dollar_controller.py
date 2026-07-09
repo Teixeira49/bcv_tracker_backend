@@ -27,7 +27,7 @@ class FilterParams:
 @router.get(
     '',
     summary="Obtiene todas las tasas de cambio de múltiples fuentes en tiempo real",
-    description="Realiza peticiones concurrentes a las fuentes del Banco Central de Venezuela (BCV), Yadio.io y Binance P2P para retornar las tasas de cambio vigentes para diversas monedas (USD, EUR, USDT, USDC). Permite promediar los valores de Binance mediante el parámetro `averaged`.",
+    description="Realiza peticiones concurrentes a las fuentes del Banco Central de Venezuela (BCV), Yadio.io, Binance P2P y Bybit P2P para retornar las tasas de cambio vigentes para diversas monedas (USD, EUR, USDT, USDC). Permite promediar los valores de Binance y Bybit mediante el parámetro `averaged`.",
     response_model=BaseResponse[AllCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Tasas de cambio obtenidas exitosamente",
@@ -39,9 +39,12 @@ class FilterParams:
     }
 )
 async def get_all_currencies(averaged: bool = Query(False)):
-    # Iniciamos las tareas de BCV y Yadio
+    # Iniciamos las tareas de BCV, Yadio y Bybit
     bcv_task = dollar_service.getCurrenciesByBCV()
     yadio_task = dollar_service.getCurrenciesByYadio()
+    # Bybit gestiona su propia degradación (omite pares sin ofertas); solo lanza
+    # 502 si TODOS sus pares vienen vacíos, igual que Binance ante fallo total.
+    bybit_task = dollar_service.get_raw_bybit_currencies()
 
     async with httpx.AsyncClient() as client:
         # Preparamos las 4 tareas de Binance (necesarias para ambos casos)
@@ -50,9 +53,9 @@ async def get_all_currencies(averaged: bool = Query(False)):
         task_usdt_sell = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Sell")
         task_usdc_sell = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Sell")
 
-        # Ejecutamos TODO en paralelo (6 peticiones concurrentes)
-        bcv_res, yadio_res, usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
-            bcv_task, yadio_task, task_usdt_buy, task_usdc_buy, task_usdt_sell, task_usdc_sell
+        # Ejecutamos TODO en paralelo (7 tareas concurrentes)
+        bcv_res, yadio_res, bybit_raw, usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
+            bcv_task, yadio_task, bybit_task, task_usdt_buy, task_usdc_buy, task_usdt_sell, task_usdc_sell
         )
 
     # Procesamos la lógica de Binance según el parámetro
@@ -61,6 +64,10 @@ async def get_all_currencies(averaged: bool = Query(False)):
             dollar_service.serialize_with_image(dollar_service.createCurrency("USDT", "Tether", (usdt_buy.value + usdt_sell.value) / 2, c.BINANCE_NAME)),
             dollar_service.serialize_with_image(dollar_service.createCurrency("USDC", "USD Coin", (usdc_buy.value + usdc_sell.value) / 2, c.BINANCE_NAME))
         ]
+        bybit_data = [
+            dollar_service.serialize_with_image(cur)
+            for cur in dollar_service.average_by_asset(bybit_raw, c.BYBIT_NAME)
+        ]
     else:
         binance_data = [
             dollar_service.serialize_with_image(usdt_buy),
@@ -68,11 +75,13 @@ async def get_all_currencies(averaged: bool = Query(False)):
             dollar_service.serialize_with_image(usdt_sell),
             dollar_service.serialize_with_image(usdc_sell)
         ]
+        bybit_data = [dollar_service.serialize_with_image(cur) for cur in bybit_raw]
 
     return api_response({
         "bcv": bcv_res['currencies'],
         "yadio": yadio_res,
-        "binance": binance_data
+        "binance": binance_data,
+        "bybit": bybit_data
     })
 
 @router.get(
@@ -243,7 +252,44 @@ async def get_binance_averaged():
         dollar_service.serialize_with_image(tether_averaged),
         dollar_service.serialize_with_image(usdc_averaged)
     ])
-    
+
+@router.get(
+    "/bybit",
+    summary="Obtiene las tasas de USDT y USDC de Bybit P2P (Compra/Venta)",
+    description="Consulta el mercado P2P de Bybit para obtener las tasas de compra y venta de USDT y USDC en Bolívares (VES). Devuelve los pares con ofertas disponibles: si un par no tiene liquidez en ese momento (p. ej. USDC compra), se omite en vez de romper la respuesta; solo si ninguno tiene ofertas se responde 502.",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Tasas de Bybit P2P obtenidas exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas de Bybit P2P obtenidas exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar Bybit P2P"},
+        502: {"model": ErrorResponse, "description": "La API de Bybit P2P no está disponible o no devolvió ofertas para ningún par"},
+        500: {"model": ErrorResponse, "description": "Error al consultar la API de Bybit P2P"}
+    }
+)
+async def get_bybit_currencies():
+    currencies = await dollar_service.get_raw_bybit_currencies()
+    return api_response([dollar_service.serialize_with_image(cur) for cur in currencies])
+
+@router.get(
+    "/bybit/averaged",
+    summary="Obtiene el promedio de compra y venta para USDT y USDC en Bybit P2P",
+    description="Calcula el precio promedio entre las órdenes de compra y venta para USDT y USDC en el mercado P2P de Bybit. Si un token solo tiene ofertas de un lado (compra o venta), usa el lado disponible; los tokens sin ofertas se omiten.",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Promedios de Bybit P2P obtenidos exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Promedios de Bybit P2P obtenidos exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al promediar tasas de Bybit"},
+        502: {"model": ErrorResponse, "description": "La API de Bybit P2P no está disponible o no devolvió ofertas para ningún par"},
+        500: {"model": ErrorResponse, "description": "Error al calcular promedios de Bybit"}
+    }
+)
+async def get_bybit_averaged():
+    currencies = await dollar_service.get_raw_bybit_currencies()
+    averaged = dollar_service.average_by_asset(currencies, c.BYBIT_NAME)
+    return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
+
 # ============================================================================================
 #  >> Usar informacion de memoria sobre los mercados
 # --------------------------------------------------------------------------------------------
@@ -252,7 +298,7 @@ async def get_binance_averaged():
     "/update-currencies", 
     tags=["Venezuela | Save Data"], 
     summary="Actualiza y persiste las tasas de cambio en la base de datos",
-    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma.",
+    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma.",
     response_model=BaseResponse[UpdateCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Base de datos actualizada correctamente",
@@ -267,16 +313,17 @@ async def get_binance_averaged():
 async def update_currencies(
     bcv: bool = Query(True, description="Incluir y guardar tasas del BCV."),
     yadio: bool = Query(True, description="Incluir y guardar tasas de Yadio.io."),
-    binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P.")
+    binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P."),
+    bybit: bool = Query(True, description="Incluir y guardar tasas de Bybit P2P.")
 ):
     """
-    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance)
+    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance, bybit)
     y actualiza los registros correspondientes en la base de datos.
     """
-    if not any([bcv, yadio, binance]):
+    if not any([bcv, yadio, binance, bybit]):
         raise HTTPException(
             status_code=400,
-            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance."
+            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit."
         )
 
     tasks = []
@@ -286,6 +333,8 @@ async def update_currencies(
         tasks.append(dollar_service.get_raw_yadio_currencies())
     if binance:
         tasks.append(dollar_service.get_raw_binance_currencies())
+    if bybit:
+        tasks.append(dollar_service.get_raw_bybit_currencies())
 
     results = await asyncio.gather(*tasks)
 
@@ -307,6 +356,10 @@ async def update_currencies(
         result_idx += 1
 
     if binance:
+        all_currencies.extend(results[result_idx])
+        result_idx += 1
+
+    if bybit:
         all_currencies.extend(results[result_idx])
         result_idx += 1
 
@@ -335,6 +388,7 @@ async def get_saved_currencies(
     bcv: bool = Query(False, description="Incluir tasas guardadas del BCV."),
     yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
     binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P."),
+    bybit: bool = Query(False, description="Incluir tasas guardadas de Bybit P2P."),
     fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
     enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
     enforce_yadio_dollar: bool = Query(False, description="Si es True, filtra resultados de Yadio para mostrar solo el Dólar.")
@@ -363,6 +417,11 @@ async def get_saved_currencies(
         db_platforms.append(c.BINANCE_NAME)
     elif fill_missing:
         live_tasks.append(dollar_service.get_raw_binance_currencies())
+
+    if bybit:
+        db_platforms.append(c.BYBIT_NAME)
+    elif fill_missing:
+        live_tasks.append(dollar_service.get_raw_bybit_currencies())
 
     results = []
 

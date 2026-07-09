@@ -10,6 +10,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 *   **Banco Central de Venezuela (BCV)**: Tasas oficiales.
 *   **Yadio.io**: Tasas del mercado paralelo.
 *   **Binance P2P**: Tasas del mercado cripto (USDT/USDC).
+*   **Bybit P2P**: Tasas del mercado cripto (USDT/USDC).
 ### Características Principales:
 *   **Caché inteligente**: Recuperación rápida de datos almacenados.
 *   **Promediado automático**: Cálculo de valores medios en mercados volátiles.
@@ -97,3 +98,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     BINANCE_NAME = 'Binance'
 
     BINANCE_LOGO_URL = 'https://public.bnbstatic.com/20190405/eb2349c3-b2f8-4a93-a286-8f86a62ea9d8.png'
+
+    BYBIT_NAME = 'Bybit'
+
+    BYBIT_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/521.png'
