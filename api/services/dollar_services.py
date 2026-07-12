@@ -20,6 +20,14 @@ class DollarService:
         self.helper = Helper()
 
     async def getDollarValueByBCV(self):
+        """Obtiene por scraping el valor oficial del dólar (USD) del BCV.
+
+        Descarga el portal del BCV, ubica el bloque del dólar y devuelve un dict
+        serializado de la moneda (con su logo). Cualquier fallo de red o de
+        parseo se propaga como ``ExternalSourceError`` vía ``source_guard``.
+
+        :return: dict serializado del dólar oficial (``serialize_with_image``).
+        """
         with source_guard(c.BCV_NAME):
             content = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
             soup = BeautifulSoup(content, c.F_HTML)
@@ -30,6 +38,15 @@ class DollarService:
             return self.serialize_with_image(currency)
 
     async def getCurrenciesByBCV(self):
+        """Obtiene por scraping todas las tasas oficiales del BCV.
+
+        Descarga el portal del BCV, extrae la fecha de vigencia y cada divisa
+        publicada (USD, EUR, CNY, TRY, RUB) y las serializa para la respuesta
+        JSON. Los fallos de red/parseo se propagan tipados vía ``source_guard``.
+
+        :return: dict ``{"date": str | None, "currencies": list[dict]}`` con las
+            monedas serializadas (incluyen su logo de plataforma).
+        """
         with source_guard(c.BCV_NAME):
             url = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
             elements = []
@@ -58,6 +75,14 @@ class DollarService:
             return {"date": date_str, "currencies": serialized_currencies}
 
     async def getCurrenciesByYadio(self):
+        """Obtiene las tasas del mercado paralelo desde la API de Yadio.io.
+
+        Consulta las tasas de cambio de VES y devuelve el dólar (USD), el euro
+        (EUR) y el bitcoin (BTC) serializados. Los fallos de red/parseo se
+        propagan tipados vía ``source_guard``.
+
+        :return: lista de dicts serializados (USD, EUR, BTC) con su logo.
+        """
         with source_guard(c.YADIO_NAME):
             response = await self.client.get(endpoints.getParMktExRate("VES"))
             currencies = [ self.createCurrency(
@@ -82,6 +107,12 @@ class DollarService:
             return [self.serialize_with_image(cur) for cur in currencies]
 
     async def getDollarByYadio(self):
+        """Obtiene solo la tasa del dólar paralelo (USD/VES) desde Yadio.io.
+
+        Los fallos de red/parseo se propagan tipados vía ``source_guard``.
+
+        :return: dict serializado del dólar paralelo (con su logo).
+        """
         with source_guard(c.YADIO_NAME):
             response = await self.client.get(endpoints.getParMktRate("VES", "USD"))
             currency = self.createCurrency(
@@ -93,6 +124,20 @@ class DollarService:
             return self.serialize_with_image(currency)
     
     async def getCurrenciesByBinance(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
+        """Obtiene el precio promedio de un par en el mercado P2P de Binance.
+
+        Consulta las ofertas del par ``asset``/``fiat`` para el lado indicado y
+        promedia sus precios. Si no hay ofertas (lista vacía / rate-limit)
+        propaga ``SourceEmptyError`` (502) en vez de dividir por cero.
+
+        :param client: ``httpx.AsyncClient`` compartido del request (para
+            resolver las peticiones realmente en paralelo).
+        :param asset: activo cripto (``"USDT"`` o ``"USDC"``).
+        :param fiat: moneda fiat (por defecto ``"VES"``).
+        :param tradeType: lado del libro, ``"Buy"`` (compra) o ``"Sell"`` (venta).
+        :return: ``Currency`` sin serializar con el precio promedio del par.
+        :raises SourceEmptyError: si el par no devuelve ofertas.
+        """
         dataPayload = {
             "asset": asset,
             "fiat": fiat,
@@ -127,6 +172,21 @@ class DollarService:
             )
         
     async def getCurrenciesByBybit(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
+        """Obtiene el precio promedio de un par en el mercado P2P de Bybit.
+
+        Análogo a Binance: consulta las ofertas del par ``asset``/``fiat`` para
+        el lado indicado y promedia sus precios. Mapea el ``tradeType``
+        (``"Buy"``/``"Sell"``) al campo ``side`` de Bybit. Sin ofertas propaga
+        ``SourceEmptyError`` (la degradación por par se decide más arriba, en
+        ``get_raw_bybit_currencies``).
+
+        :param client: ``httpx.AsyncClient`` compartido del request.
+        :param asset: activo cripto (``"USDT"`` o ``"USDC"``).
+        :param fiat: moneda fiat (por defecto ``"VES"``).
+        :param tradeType: ``"Buy"`` (asks) o ``"Sell"`` (bids).
+        :return: ``Currency`` sin serializar con el precio promedio del par.
+        :raises SourceEmptyError: si el par no devuelve ofertas.
+        """
         # Bybit expone su P2P público con `side`: "1" = Buy (asks, precio mayor),
         # "0" = Sell (bids, precio menor). Aceptamos el mismo `tradeType`
         # ("Buy"/"Sell") que Binance para mantener la simetría del controlador.
@@ -311,6 +371,14 @@ class DollarService:
             return {"date": date_str, "currencies": currencies}
 
     async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
+        """Recupera de la base de datos las últimas tasas guardadas.
+
+        :param platforms: lista opcional de plataformas por las que filtrar
+            (p. ej. ``[Constants.BCV_NAME]``). Si es ``None`` o vacía, devuelve
+            las monedas de todas las plataformas.
+        :return: lista de dicts serializados (con ``id`` y logo de plataforma);
+            lista vacía si ocurre un error de lectura.
+        """
         session = SessionLocal()
         try:
             query = session.query(Currency)
@@ -428,6 +496,19 @@ class DollarService:
         return await loop.run_in_executor(None, _calc)
 
     def createCurrency(self, code: str = c.EMPTY_STRING, name: str = c.EMPTY_STRING, value:float = 0.0, platform: str = c.BCV_NAME, change: float = 0.0) -> Currency:
+        """Construye una entidad ``Currency`` normalizando sus campos de texto.
+
+        Recorta el ``code``, capitaliza el ``name`` y sella las fechas de
+        creación/actualización con la hora de Caracas. Es la fábrica central de
+        monedas usada por todas las fuentes.
+
+        :param code: código de la moneda (p. ej. ``"USD"``, ``"USDT"``).
+        :param name: nombre legible de la moneda.
+        :param value: valor de la tasa en VES.
+        :param platform: plataforma de origen (por defecto el BCV).
+        :param change: variación porcentual (ROC); ``0.0`` si no aplica.
+        :return: instancia ``Currency`` lista para serializar o persistir.
+        """
         return Currency(
             code=code.strip(),
             name=name.strip().capitalize(),

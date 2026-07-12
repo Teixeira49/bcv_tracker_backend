@@ -22,32 +22,63 @@ class HttpClient:
         self._timeout = httpx.Timeout(timeout)
 
     async def get(self, url, params=None, headers=None, client=None):
+        """GET que devuelve el cuerpo ya parseado como JSON.
+
+        :param url: URL a consultar.
+        :param params: query params opcionales.
+        :param headers: cabeceras opcionales.
+        :param client: ``httpx.AsyncClient`` a reutilizar; si es ``None`` se crea
+            uno efímero por llamada.
+        :return: el cuerpo de la respuesta deserializado (dict/list).
+        """
         response = await self._send("GET", url, client=client, params=params, headers=headers)
         return self._parse_json(response)
 
     async def get_content(self, url, params=None, headers=None, verify=None, client=None):
+        """GET que devuelve el cuerpo crudo en bytes (p. ej. HTML para scraping).
+
+        :param verify: verificación TLS (solo se aplica al crear un cliente
+            efímero; con ``client`` provisto se usa la del cliente).
+        :param client: ``httpx.AsyncClient`` a reutilizar, u ``None`` para uno efímero.
+        :return: ``response.content`` en bytes.
+        """
         response = await self._send(
             "GET", url, client=client, params=params, headers=headers, verify=verify
         )
         return response.content
 
     async def post(self, url, data=None, headers=None, client=None):
+        """POST que devuelve el cuerpo ya parseado como JSON.
+
+        :param data: form-data (dict) o contenido crudo (str/bytes ya serializados).
+        :param client: ``httpx.AsyncClient`` a reutilizar, u ``None`` para uno efímero.
+        :return: el cuerpo de la respuesta deserializado.
+        """
         response = await self._send("POST", url, client=client, headers=headers, data=data)
         return self._parse_json(response)
 
     async def put(self, url, data=None, headers=None, client=None):
+        """PUT que devuelve el cuerpo ya parseado como JSON (ver :meth:`post`)."""
         response = await self._send("PUT", url, client=client, headers=headers, data=data)
         return self._parse_json(response)
 
     async def delete(self, url, data=None, headers=None, client=None):
+        """DELETE que devuelve el cuerpo ya parseado como JSON (ver :meth:`post`)."""
         response = await self._send("DELETE", url, client=client, headers=headers, data=data)
         return self._parse_json(response)
 
     async def patch(self, url, data=None, headers=None, client=None):
+        """PATCH que devuelve el cuerpo ya parseado como JSON (ver :meth:`post`)."""
         response = await self._send("PATCH", url, client=client, headers=headers, data=data)
         return self._parse_json(response)
 
     async def _send(self, method, url, *, client=None, params=None, headers=None, data=None, verify=None):
+        """Ejecuta la petición HTTP y valida el estado de la respuesta.
+
+        Reutiliza el ``client`` provisto (para peticiones concurrentes del mismo
+        request) o crea uno efímero aplicando ``verify``. Lanza
+        ``raise_for_status`` para que ``source_guard`` traduzca los errores.
+        """
         request_kwargs = {
             "params": params,
             "headers": headers,
@@ -83,6 +114,11 @@ class HttpClient:
 
     @staticmethod
     def _body_kwargs(data):
+        """Traduce ``data`` a los kwargs de cuerpo que espera httpx.
+
+        Devuelve ``{"content": ...}`` para str/bytes (JSON ya serializado) o
+        ``{"data": ...}`` para form-data (dict); ``{}`` si no hay cuerpo.
+        """
         # httpx distingue el form-data (dict) del contenido crudo (str/bytes,
         # p. ej. un JSON ya serializado con su propio Content-Type).
         if data is None:

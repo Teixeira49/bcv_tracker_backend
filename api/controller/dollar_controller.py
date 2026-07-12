@@ -39,6 +39,10 @@ class FilterParams:
     }
 )
 async def get_all_currencies(averaged: bool = Query(False)):
+    """Devuelve en vivo las tasas de todas las fuentes, consultadas en paralelo.
+
+    Con ``averaged=True`` promedia compra/venta de Binance y Bybit por activo.
+    """
     # Iniciamos las tareas de BCV, Yadio, Bybit y Exchange Monitor
     bcv_task = dollar_service.getCurrenciesByBCV()
     yadio_task = dollar_service.getCurrenciesByYadio()
@@ -103,6 +107,7 @@ async def get_all_currencies(averaged: bool = Query(False)):
     }
 )
 async def get_bcv_currencies():
+    """Devuelve en vivo todas las tasas oficiales del BCV con su fecha de vigencia."""
     exchange_rate = await dollar_service.getCurrenciesByBCV()
     return api_response(exchange_rate)
     
@@ -121,6 +126,7 @@ async def get_bcv_currencies():
     }
 )
 async def get_bcv_with_memory(update: bool = Query(False)):
+    """Devuelve las tasas del BCV desde la BD, o en vivo si ``update=True``."""
     if update:
         return api_response(await dollar_service.getCurrenciesByBCV())
     else:
@@ -141,6 +147,7 @@ async def get_bcv_with_memory(update: bool = Query(False)):
     }
 )
 async def get_bcv_dollar():
+    """Devuelve únicamente la tasa oficial del dólar (USD) del BCV."""
     exchange_rate = await dollar_service.getDollarValueByBCV()
     return api_response(exchange_rate)
 
@@ -159,6 +166,7 @@ async def get_bcv_dollar():
     }
 )
 async def get_yadio_currencies():
+    """Devuelve las tasas de Yadio.io (dólar y euro paralelos, y bitcoin)."""
     exchange_rate = await dollar_service.getCurrenciesByYadio()
     return api_response(exchange_rate)
     
@@ -177,6 +185,7 @@ async def get_yadio_currencies():
     }
 )
 async def get_yadio_dollar():
+    """Devuelve únicamente la tasa del dólar paralelo (USD/VES) de Yadio.io."""
     exchange_rate = await dollar_service.getDollarByYadio()
     return api_response(exchange_rate)
 
@@ -195,6 +204,7 @@ async def get_yadio_dollar():
     }
 )
 async def get_binance_currencies():
+    """Devuelve las 4 tasas de Binance P2P (compra/venta de USDT y USDC)."""
     async with httpx.AsyncClient() as client:
         task_usdt_buy = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Buy")
         task_usdc_buy = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Buy")
@@ -230,6 +240,7 @@ async def get_binance_currencies():
     }
 )
 async def get_binance_averaged():
+    """Devuelve el promedio compra/venta de USDT y USDC en Binance P2P."""
     async with httpx.AsyncClient() as client:
         # Ejecutamos las 4 solicitudes en paralelo
         task_usdt_buy = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Buy")
@@ -272,6 +283,7 @@ async def get_binance_averaged():
     }
 )
 async def get_bybit_currencies():
+    """Devuelve las tasas de Bybit P2P (USDT/USDC), omitiendo pares sin ofertas."""
     currencies = await dollar_service.get_raw_bybit_currencies()
     return api_response([dollar_service.serialize_with_image(cur) for cur in currencies])
 
@@ -290,6 +302,7 @@ async def get_bybit_currencies():
     }
 )
 async def get_bybit_averaged():
+    """Devuelve el promedio compra/venta de USDT y USDC en Bybit P2P."""
     currencies = await dollar_service.get_raw_bybit_currencies()
     averaged = dollar_service.average_by_asset(currencies, c.BYBIT_NAME)
     return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
@@ -309,6 +322,7 @@ async def get_bybit_averaged():
     }
 )
 async def get_exchange_monitor_currencies():
+    """Devuelve en vivo lo que reporta Exchange Monitor (valor propio, promedio y mercados)."""
     exchange_rate = await dollar_service.getCurrenciesByExchangeMonitor()
     return api_response(exchange_rate)
 
