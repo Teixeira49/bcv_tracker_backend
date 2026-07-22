@@ -5,7 +5,7 @@ import asyncio
 from typing import Optional, List
 
 from api.core.client.http_client import HttpClient
-from api.core.errors.exceptions import source_guard, SourceEmptyError
+from api.core.errors.exceptions import source_guard, SourceEmptyError, SourceParsingError
 from api.models.bd_currency import Currency
 from api.services.bd_service import save_currencies_to_db, save_platform_date, get_platform_date, SessionLocal
 from api.utils.constants.constants import Constants as c
@@ -243,6 +243,103 @@ class DollarService:
             response = await self.client.get(endpoints.getAirtmRates())
             return self._airtm_currencies_from_response(response)
 
+    async def _fetch_exchange_monitor_payload(self) -> dict:
+        """Obtiene el JSON de tasas de Exchange Monitor (scraping híbrido).
+
+        El sitio no expone API pública ni sirve las tasas en el HTML estático
+        (los contenedores llegan vacíos y se rellenan por JavaScript). El flujo,
+        que replica lo que hace el navegador, es:
+
+        1. GET a la página: entrega la cookie de sesión (PHPSESSID) y, en un
+           ``<meta name="csrf-token">``, el token CSRF. El token se extrae con
+           BeautifulSoup usando selectores centralizados en ``ScrappingTags``.
+        2. POST al endpoint de datos con ese token (header ``X-CSRF-Token``),
+           reutilizando el **mismo** ``httpx.AsyncClient`` para conservar la
+           cookie, más ``Referer``/``Origin`` (el backend rechaza con 403 sin
+           ellos). Devuelve el JSON con la lista de mercados.
+
+        No abre ``source_guard`` aquí: lo hacen los métodos públicos que lo
+        invocan. Los fallos de red/HTTP los traduce ese guard; aquí solo se
+        lanzan errores tipados de parseo/vacío cuando la estructura no cuadra.
+        """
+        async with httpx.AsyncClient(
+            headers={"User-Agent": c.EM_USER_AGENT},
+            follow_redirects=True,
+        ) as client:
+            html = await self.client.get_content(endpoints.EXCHANGE_MONITOR_PAGE, client=client)
+            soup = BeautifulSoup(html, c.F_HTML)
+            meta = soup.find(tag.META_TAG, attrs={tag.KEY_META_NAME: tag.CSRF_META_NAME})
+            token = meta.attrs.get(tag.KEY_CONTENT) if meta else None
+            if not token:
+                raise SourceParsingError(c.EXCHANGE_MONITOR_NAME, detail="token CSRF ausente en el HTML")
+
+            headers = {
+                "X-CSRF-Token": token,
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": endpoints.EXCHANGE_MONITOR_PAGE,
+                "Origin": endpoints.EXCHANGE_MONITOR_ORIGIN,
+                "Accept": c.EM_ACCEPT,
+            }
+            payload = await self.client.post(
+                endpoints.getExchangeMonitorData(),
+                data={c.EM_TIMEZONE_KEY: c.EM_TIMEZONE},
+                headers=headers,
+                client=client,
+            )
+
+        if not payload.get(c.EM_KEY_SUCCESS) or not payload.get(c.EM_KEY_DATA):
+            # Respuesta 200 pero sin datos utilizables (403 lógico, sin mercados).
+            raise SourceEmptyError(c.EXCHANGE_MONITOR_NAME)
+        return payload
+
+    def _build_exchange_monitor_currency(self, item: dict) -> Currency:
+        """Convierte una entrada del JSON de Exchange Monitor en un ``Currency``.
+
+        El ``code`` se deriva del id del sitio sin su prefijo de país
+        (``ve-em`` → ``em``); el nombre usa la variante larga si existe.
+        """
+        raw_id = item.get(c.EM_KEY_ID) or c.EMPTY_STRING
+        code = raw_id[len(c.EM_ID_PREFIX):] if raw_id.startswith(c.EM_ID_PREFIX) else raw_id
+        name = item.get(c.EM_KEY_NAME_LARGE) or item.get(c.EM_KEY_NAME) or code
+        value = self.helper.formatCuValue(item.get(c.EM_KEY_RATE, "0"))
+        return self.createCurrency(code, name, value, c.EXCHANGE_MONITOR_NAME)
+
+    async def getCurrenciesByExchangeMonitor(self):
+        """Tasas en vivo de Exchange Monitor: valor propio + promedio + mercados.
+
+        Devuelve todas las entradas que reporta el sitio (incluidos el valor
+        propio ``em`` y el ``promedio`` estimado) serializadas, junto con la
+        fecha de actualización del sitio. Es el análogo a ``getCurrenciesByBCV``.
+        """
+        with source_guard(c.EXCHANGE_MONITOR_NAME):
+            payload = await self._fetch_exchange_monitor_payload()
+            date_str = (payload.get(c.EM_KEY_SETTINGS) or {}).get(c.EM_KEY_DATE)
+            currencies = [self._build_exchange_monitor_currency(item) for item in payload[c.EM_KEY_DATA]]
+            serialized = [self.serialize_with_image(cur) for cur in currencies]
+            return {"date": date_str, "currencies": serialized}
+
+    async def get_raw_exchange_monitor_currencies(self) -> dict:
+        """Tasas de Exchange Monitor para persistir: solo valor propio + promedio.
+
+        A diferencia del endpoint en vivo (que devuelve todos los mercados), la
+        persistencia guarda únicamente las dos señales propias de la plataforma:
+        el valor propio del sitio (``em``) y el promedio estimado (``average``).
+        Devuelve ``{date, currencies}`` como BCV para que el controlador guarde
+        también la fecha de la plataforma.
+        """
+        with source_guard(c.EXCHANGE_MONITOR_NAME):
+            payload = await self._fetch_exchange_monitor_payload()
+            date_str = (payload.get(c.EM_KEY_SETTINGS) or {}).get(c.EM_KEY_DATE)
+            wanted = {c.EM_ID_OWN, c.EM_ID_AVERAGE}
+            currencies = [
+                self._build_exchange_monitor_currency(item)
+                for item in payload[c.EM_KEY_DATA]
+                if item.get(c.EM_KEY_ID) in wanted
+            ]
+            if not currencies:
+                raise SourceEmptyError(c.EXCHANGE_MONITOR_NAME)
+            return {"date": date_str, "currencies": currencies}
+
     async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
         session = SessionLocal()
         try:
@@ -379,7 +476,8 @@ class DollarService:
             c.YADIO_NAME: c.YADIO_LOGO_URL,
             c.BINANCE_NAME: c.BINANCE_LOGO_URL,
             c.BYBIT_NAME: c.BYBIT_LOGO_URL,
-            c.AIRTM_NAME: c.AIRTM_LOGO_URL
+            c.AIRTM_NAME: c.AIRTM_LOGO_URL,
+            c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
         }
         data['platform_img'] = platform_images.get(currency.platform, "")
         return data

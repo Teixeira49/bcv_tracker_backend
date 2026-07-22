@@ -1,0 +1,174 @@
+{
+  "brand": {
+    "name": "Dolar Tracker",
+    "description": "Monitoreo de tasas cambiarias con estética premium y profesional",
+    "visual_style": "Deep Navy / Premium Dark Mode con uso de degradados"
+  },
+  "design_system": {
+    "grid_system": {
+      "base_unit": 8,
+      "description": "Sistema de rejilla basado en 8 puntos para espaciado y dimensiones"
+    },
+    "colors": {
+      "palette": {
+        "primary": {
+          "main": "#02466D",
+          "description": "Azul Profundo - Color de marca principal y estados activos (Tabs, Botones, Selectores)",
+          "shades": {
+            "50": "#EFF5FF",
+            "500": "#02466D",
+            "900": "#001C2B"
+          }
+        },
+        "secondary": {
+          "main": "#064469",
+          "description": "Azul Complementario para elementos de interfaz superpuestos"
+        },
+        "background": {
+          "main": "#070E15",
+          "gradient": {
+            "type": "linear",
+            "direction": "top_left_to_bottom_right",
+            "colors": [
+              "#0B2B43",
+              "#040A10"
+            ],
+            "description": "Degradado principal utilizado en el fondo de todas las pantallas y el Splash Screen"
+          }
+        },
+        "surface": {
+          "card": "#0A243A",
+          "dialog": "#0A243A",
+          "bottom_nav": "#0A243A"
+        },
+        "text": {
+          "primary": "#FFFFFF",
+          "secondary": "#8AA0B1",
+          "accent": "#5E8DAE"
+        },
+        "semantic": {
+          "success": {
+            "color": "#39E079",
+            "background": "rgba(57, 224, 121, 0.15)"
+          },
+          "error": {
+            "color": "#F44336",
+            "background": "rgba(244, 67, 54, 0.15)"
+          },
+          "warning": "#FF9800",
+          "info": "#1187CE"
+        }
+      },
+      "modes": {
+        "dark": {
+          "is_default": true,
+          "background_primary": "gradient",
+          "background_secondary": "#0A243A",
+          "text_primary": "#FFFFFF",
+          "text_secondary": "#8AA0B1"
+        }
+      }
+    },
+    "typography": {
+      "font_family": "System Sans-Serif",
+      "styles": {
+        "h1": {
+          "size": 32,
+          "weight": "bold",
+          "letter_spacing": 2,
+          "description": "Título del Splash screen (DOLAR TRACKER)"
+        },
+        "h2": {
+          "size": 22,
+          "weight": "bold",
+          "description": "Encabezados de pantalla (e.g., Inicio, Convertir, Configuración)"
+        },
+        "currency_value": {
+          "size": 28,
+          "weight": "bold",
+          "description": "Valores principales de moneda (e.g., Bs.S 477.63)"
+        },
+        "body_primary": {
+          "size": 16,
+          "weight": "medium",
+          "description": "Nombres de monedas, opciones de menú"
+        },
+        "body_secondary": {
+          "size": 13,
+          "weight": "normal",
+          "description": "Textos descriptivos (e.g., Valor de la moneda, Última actualización)"
+        }
+      }
+    },
+    "spacing_and_radius": {
+      "radius": {
+        "none": 0,
+        "xs": 8,
+        "sm": 12,
+        "md": 16,
+        "lg": 20,
+        "xl": 24,
+        "full": 9999
+      },
+      "spacing": {
+        "xs": 8,
+        "sm": 12,
+        "md": 16,
+        "lg": 24,
+        "xl": 32,
+        "container_padding": 16
+      }
+    },
+    "components": {
+      "cards": {
+        "border_radius": 16,
+        "background_color": "surface.card",
+        "padding": 16,
+        "margin_bottom": 12,
+        "has_border": false
+      },
+      "tabs": {
+        "style": "segmented_control",
+        "border_radius": 16,
+        "active_background": "primary.main",
+        "inactive_background": "transparent",
+        "text_color_active": "text.primary",
+        "text_color_inactive": "text.secondary"
+      },
+      "bottom_navigation": {
+        "style": "floating",
+        "border_radius": 24,
+        "background_color": "primary.main",
+        "active_icon_color": "#1187CE",
+        "inactive_icon_color": "text.secondary",
+        "margin": {
+          "bottom": 16,
+          "horizontal": 16
+        }
+      },
+      "buttons": {
+        "icon_button": {
+          "shape": "circular",
+          "background_color": "primary.main",
+          "icon_color": "text.primary"
+        },
+        "selector": {
+          "border_radius": 12,
+          "background_color": "primary.main",
+          "padding_horizontal": 12
+        }
+      },
+      "modals": {
+        "type": "bottom_sheet",
+        "border_radius_top": 24,
+        "background_color": "surface.dialog",
+        "header_padding": 24
+      },
+      "badges": {
+        "border_radius": 16,
+        "padding_horizontal": 8,
+        "padding_vertical": 4
+      }
+    }
+  }
+}

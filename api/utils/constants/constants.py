@@ -12,6 +12,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 *   **Binance P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Bybit P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Airtm**: Tasas de compra/venta del dólar (USD/VES).
+*   **Exchange Monitor**: Agregador de mercados (valor propio + promedio estimado + mercados que reporta).
 ### Características Principales:
 *   **Caché inteligente**: Recuperación rápida de datos almacenados.
 *   **Promediado automático**: Cálculo de valores medios en mercados volátiles.
@@ -107,3 +108,49 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     AIRTM_NAME = 'Airtm'
 
     AIRTM_LOGO_URL = 'https://www.google.com/s2/favicons?domain=airtm.com&sz=128'
+
+    EXCHANGE_MONITOR_NAME = 'Exchange Monitor'
+
+    EXCHANGE_MONITOR_LOGO_URL = 'https://exchangemonitor.net/assets/img/logo.png'
+
+    # --- Exchange Monitor (scraping híbrido: token CSRF del HTML + JSON) -------
+    # El sitio no expone API pública ni sirve las tasas en el HTML estático (los
+    # contenedores llegan vacíos y se rellenan por JS). Se obtiene el token CSRF
+    # del HTML y con él se pide el JSON de datos de Venezuela. Estas constantes
+    # centralizan las claves del payload y los identificadores del sitio.
+    EM_USER_AGENT = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                     'AppleWebKit/537.36 (KHTML, like Gecko) '
+                     'Chrome/120.0.0.0 Safari/537.36')
+
+    EM_ACCEPT = 'application/json, text/javascript, */*; q=0.01'
+
+    # El endpoint de datos espera la zona horaria del cliente en el body.
+    EM_TIMEZONE = 'America/Caracas'
+
+    EM_TIMEZONE_KEY = 'timezone'
+
+    # Los ids del sitio vienen prefijados por país (ej. "ve-em"). Persistimos
+    # solo el valor propio del sitio (EM) y el promedio estimado; el resto de
+    # mercados se exponen solo en vivo.
+    EM_ID_PREFIX = 've-'
+
+    EM_ID_OWN = 've-em'
+
+    EM_ID_AVERAGE = 've-average'
+
+    # Claves del payload JSON de Exchange Monitor.
+    EM_KEY_SUCCESS = 'success'
+
+    EM_KEY_DATA = 'data'
+
+    EM_KEY_SETTINGS = 'settings'
+
+    EM_KEY_DATE = 'date'
+
+    EM_KEY_ID = 'id'
+
+    EM_KEY_NAME = 'name'
+
+    EM_KEY_NAME_LARGE = 'name_large'
+
+    EM_KEY_RATE = 'rate'

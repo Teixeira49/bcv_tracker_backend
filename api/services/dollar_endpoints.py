@@ -12,6 +12,16 @@ class DollarEndpoints:
 
     PAR_MKT_D = f'{c.PARALLEL_MARKET_D_URL}/'
 
+    PAR_MKT_F = f'{c.PARALLEL_MARKET_F_URL}/'
+
+    # Exchange Monitor renderiza las tasas del lado del cliente: la página HTML
+    # solo trae el token CSRF; los valores se piden por separado al endpoint de
+    # datos (JSON). Guardamos ambos: la página (para el token + cookie de sesión)
+    # y el endpoint de datos de Venezuela.
+    EXCHANGE_MONITOR_PAGE = f'{c.PARALLEL_MARKET_F_URL}/dolar-venezuela'
+
+    EXCHANGE_MONITOR_ORIGIN = c.PARALLEL_MARKET_F_URL
+
     @classmethod
     def getParMktRate(cls, target: str, base: str):
         return cls.PAR_MKT_B + f"rate/{target}/{base}"
@@ -32,3 +42,7 @@ class DollarEndpoints:
     def getAirtmRates(cls):
         # Airtm sirve el JSON de tasas en la raíz del host (rates.airtm.io/).
         return cls.PAR_MKT_D
+
+    @classmethod
+    def getExchangeMonitorData(cls):
+        return cls.PAR_MKT_F + "data/rates/ve"

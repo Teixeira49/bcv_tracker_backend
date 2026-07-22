@@ -13,7 +13,9 @@ El **BCV Tracker Backend** es una API RESTful desarrollada con **FastAPI** que a
 - **Monitoreo Multi-fuente**: Obtiene tasas de:
   - **BCV (Banco Central de Venezuela)**: Raspado (scraping) directo del sitio oficial.
   - **Binance P2P**: Tasas promedio de compra y venta para USDT y USDC.
+  - **Bybit P2P**: Tasas de compra y venta para USDT y USDC (con degradación elegante por par).
   - **Yadio.io**: Tasas de mercado paralelo y criptomonedas.
+  - **Exchange Monitor**: Agregador de mercados. Como el sitio renderiza las tasas por JavaScript, se resuelve con un scraping híbrido (token CSRF del HTML + endpoint de datos JSON); se expone su valor propio, el promedio estimado y los mercados que reporta.
 - **Procesamiento Concurrente**: Utiliza `asyncio` y `httpx` para realizar múltiples peticiones en paralelo, garantizando tiempos de respuesta ultrarrápidos.
 - **Persistencia de Datos**: Integración con PostgreSQL (via SQLAlchemy) para guardar las últimas tasas y calcular variaciones (ROC - Rate of Change).
 - **Cálculos Inteligentes**: Generación de promedios para el mercado de Binance P2P.
@@ -44,7 +46,9 @@ graph TD
     subgraph Core_Business ["Lógica de Negocio"]
         DollarService --> Scraper["BCV Scraper"]
         DollarService --> BinanceAPI["Binance API"]
+        DollarService --> BybitAPI["Bybit API"]
         DollarService --> YadioAPI["Yadio API"]
+        DollarService --> EMScraper["Exchange Monitor (CSRF + JSON)"]
         DollarService --> DB_Service["Database Service"]
         DB_Service --> Postgres[("PostgreSQL DB")]
     end
@@ -97,7 +101,10 @@ Las principales librerías utilizadas en este proyecto son:
    ```
 
 4. **Configurar variables de entorno**:
-   Crea un archivo `.env` en la raíz con **todas** las variables requeridas. Si falta alguna, la app aborta al arrancar con un mensaje que nombra la variable faltante.
+   Copia la plantilla `.env.example` a `.env` y rellena los valores. La app valida **todas** las variables requeridas al arrancar; si falta alguna, aborta con un mensaje que nombra la variable faltante.
+   ```bash
+   cp .env.example .env
+   ```
    ```env
    # Base de datos (PostgreSQL)
    DATABASE_URL=postgresql://usuario:password@localhost:5432/nombre_db
@@ -106,8 +113,11 @@ Las principales librerías utilizadas en este proyecto son:
    OFFICIAL_MARKET_DATA_PROVIDER_URL=https://www.bcv.org.ve      # BCV (tasas oficiales)
    MARKET_DATA_PROVIDER_A_URL=https://p2p.binance.com           # Binance P2P
    MARKET_DATA_PROVIDER_B_URL=https://api.yadio.io              # Yadio.io
+   MARKET_DATA_PROVIDER_C_URL=https://api2.bybit.com            # Bybit P2P
+   MARKET_DATA_PROVIDER_D_URL=https://rates.airtm.io            # Airtm
+   MARKET_DATA_PROVIDER_F_URL=https://exchangemonitor.net       # Exchange Monitor
    ```
-   > Los valores de las URLs son ejemplos de los proveedores públicos usados por el proyecto; ajústalos según tu entorno. El `.env` está en `.gitignore` y nunca se versiona.
+   > Los valores de las URLs son ejemplos de los proveedores públicos usados por el proyecto; ajústalos según tu entorno. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 
 5. **Ejecutar migraciones**:
    ```bash
