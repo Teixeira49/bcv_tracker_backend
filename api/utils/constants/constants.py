@@ -12,6 +12,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 *   **Binance P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Bybit P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **OKX P2P**: Tasas del mercado cripto (USDT/USDC).
+*   **Bitget P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Airtm**: Tasas de compra/venta del dólar (USD/VES).
 *   **Exchange Monitor**: Agregador de mercados (valor propio + promedio estimado + mercados que reporta).
 ### Características Principales:
@@ -113,6 +114,10 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     AIRTM_NAME = 'Airtm'
 
     AIRTM_LOGO_URL = 'https://www.google.com/s2/favicons?domain=airtm.com&sz=128'
+
+    BITGET_NAME = 'Bitget'
+
+    BITGET_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/513.png'
 
     EXCHANGE_MONITOR_NAME = 'Exchange Monitor'
 

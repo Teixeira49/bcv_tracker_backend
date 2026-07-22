@@ -324,6 +324,70 @@ class DollarService:
                 raise SourceEmptyError(c.OKX_NAME)
             return currencies
 
+    async def getCurrenciesByBitget(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
+        # Bitget expone su P2P público vía POST. `side`: 1 = el usuario COMPRA
+        # (precio mayor, asks) y 2 = el usuario VENDE (precio menor, bids).
+        # Aceptamos el mismo `tradeType` ("Buy"/"Sell") que Binance/Bybit/OKX
+        # para mantener la simetría del controlador.
+        side = 1 if tradeType == "Buy" else 2
+        dataPayload = {
+            "side": side,
+            "pageNo": 1,
+            "pageSize": c.PAGE_LIMIT,
+            "coinCode": asset,
+            "fiatCode": fiat,
+        }
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Content-Type": "application/json"
+        }
+        with source_guard(c.BITGET_NAME):
+            response = await self.client.post(endpoints.getBitgetP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
+            items = (response.get("data") or {}).get("dataList") or []
+            prices = [float(item["price"]) for item in items]
+            # Igual que Bybit/OKX: sin ofertas no hay nada que promediar. La
+            # degradación (omitir pares vacíos) se decide en get_raw_bitget_currencies.
+            if not prices:
+                raise SourceEmptyError(c.BITGET_NAME)
+            average = sum(prices) / len(prices)
+
+            return self.createCurrency(
+                asset,
+                "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
+                average,
+                c.BITGET_NAME
+            )
+
+    async def get_raw_bitget_currencies(self) -> List[Currency]:
+        """Obtiene las tasas de Bitget (USDT/USDC Buy/Sell) con degradación elegante.
+
+        Como Bybit/OKX, el P2P de Bitget en VES puede tener pares sin liquidez.
+        Omitimos los pares que vengan vacíos (``SourceEmptyError``) y devolvemos
+        los que sí tienen ofertas; solo si **ningún** par tiene datos propagamos
+        ``SourceEmptyError`` (502). Cualquier otro fallo (red, parseo) se propaga.
+        """
+        with source_guard(c.BITGET_NAME):
+            async with httpx.AsyncClient() as client:
+                tasks = [
+                    self.getCurrenciesByBitget(client, "USDT", "VES", "Buy"),
+                    self.getCurrenciesByBitget(client, "USDC", "VES", "Buy"),
+                    self.getCurrenciesByBitget(client, "USDT", "VES", "Sell"),
+                    self.getCurrenciesByBitget(client, "USDC", "VES", "Sell")
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            currencies = []
+            for res in results:
+                if isinstance(res, SourceEmptyError):
+                    continue  # par sin ofertas: se omite, no tumba la fuente
+                if isinstance(res, BaseException):
+                    raise res  # fallo real (red/parseo/timeout): se propaga
+                currencies.append(res)
+
+            if not currencies:
+                raise SourceEmptyError(c.BITGET_NAME)
+            return currencies
+
     def average_by_asset(self, currencies: List[Currency], platform: str) -> List[Currency]:
         """Promedia por activo las tasas disponibles de una plataforma cripto.
 
@@ -627,6 +691,7 @@ class DollarService:
             c.BYBIT_NAME: c.BYBIT_LOGO_URL,
             c.OKX_NAME: c.OKX_LOGO_URL,
             c.AIRTM_NAME: c.AIRTM_LOGO_URL,
+            c.BITGET_NAME: c.BITGET_LOGO_URL,
             c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
         }
         data['platform_img'] = platform_images.get(currency.platform, "")
