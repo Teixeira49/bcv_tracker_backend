@@ -12,6 +12,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 *   **Binance P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Bybit P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **OKX P2P**: Tasas del mercado cripto (USDT/USDC).
+*   **Airtm**: Tasas de compra/venta del dólar (USD/VES).
 *   **Exchange Monitor**: Agregador de mercados (valor propio + promedio estimado + mercados que reporta).
 ### Características Principales:
 *   **Caché inteligente**: Recuperación rápida de datos almacenados.
@@ -79,7 +80,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     # se registra en el servidor.
     INTERNAL_ERROR_MSG = 'Ocurrió un error interno inesperado al procesar la solicitud.'
 
-    # Mensajes de fallo de las fuentes externas de tasas (BCV, Yadio, Binance).
+    # Mensajes de fallo de las fuentes externas de tasas (BCV, Yadio, Binance, Bybit, Airtm, Exchange Monitor).
     # {source} se rellena con el nombre de la plataforma afectada.
     SOURCE_TIMEOUT_MSG = 'Tiempo de espera agotado al consultar la fuente: {source}.'
 
@@ -108,6 +109,10 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     OKX_NAME = 'OKX'
 
     OKX_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/294.png'
+
+    AIRTM_NAME = 'Airtm'
+
+    AIRTM_LOGO_URL = 'https://www.google.com/s2/favicons?domain=airtm.com&sz=128'
 
     EXCHANGE_MONITOR_NAME = 'Exchange Monitor'
 

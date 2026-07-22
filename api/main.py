@@ -85,7 +85,8 @@ try:
 
     @app.exception_handler(ExternalSourceError)
     async def external_source_error_handler(request: Request, exc: ExternalSourceError):
-        # Traduce el fallo de una fuente externa (BCV, Yadio, Binance) al código
+        # Traduce el fallo de una fuente externa (BCV, Yadio, Binance, Bybit,
+        # Airtm, Exchange Monitor) al código
         # HTTP semántico (408 timeout / 502 fuente caída) usando el envelope de
         # error estándar, en lugar de un 200 con datos vacíos o un 500 confuso.
         return error_response(message=exc.message, status_code=exc.status_code)
@@ -113,6 +114,7 @@ try:
 
     @app.get("/", response_class=HTMLResponse, tags=["Root"], summary="Página de bienvenida", include_in_schema=False)
     def root():
+        """Sirve la página de bienvenida (HTML) con el nombre y versión de la app."""
         # Pasamos dinámicamente el nombre y la versión desde las constantes
         html_content = root_html(c.APP_NAME, c.VERSION)
         return HTMLResponse(content=html_content, status_code=200)
@@ -128,6 +130,7 @@ except Exception as e:
 
     @app.get("/", tags=["API - Error Handling"])
     async def root_error():
+        """Root de respaldo: informa que la app falló al inicializar."""
         return {
             "status": "Critical Error during Initialization",
             "message": error_message,
@@ -136,4 +139,5 @@ except Exception as e:
 
     @app.get("/__import_error", tags=["API - Error Handling"])
     async def import_error():
+        """Expone el traceback del fallo de importación para depuración."""
         return {"traceback": tb.splitlines()}

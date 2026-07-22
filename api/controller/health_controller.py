@@ -33,6 +33,7 @@ class HealthCheckResponse(BaseModel):
     }
 )
 async def health_check():
+    """Devuelve el estado del servicio con su versión y nombre (health-check)."""
     return HealthCheckResponse(
         status="ok",
         version=c.VERSION,
@@ -41,6 +42,7 @@ async def health_check():
 
 @router.get("/health/ui", include_in_schema=False)
 async def health_check_ui():
+    """Sirve la vista HTML del health-check para inspección humana."""
     html_content = health_html(c.APP_NAME, c.VERSION)
     return HTMLResponse(content=html_content, status_code=200)
 
