@@ -209,9 +209,39 @@ class DollarService:
 
         averaged = []
         for code, values in groups.items():
-            name = "Tether" if code == "USDT" else "USD Coin" if code == "USDC" else code
+            name = "Tether" if code == "USDT" else "USD Coin" if code == "USDC" else "Dolar" if code == "USD" else code
             averaged.append(self.createCurrency(code, name, sum(values) / len(values), platform))
         return averaged
+
+    def _airtm_currencies_from_response(self, response) -> List[Currency]:
+        """Extrae las tasas USD/VES del JSON público de Airtm (rates.airtm.io).
+
+        La respuesta es ``{"data": {"ves/usd": {"addValue": .., "withdrawValue": ..}}}``.
+        ``addValue`` es la tasa para *agregar* fondos (comprar USD pagando VES →
+        Buy) y ``withdrawValue`` la de *retirar* (vender USD → VES → Sell). Si el
+        par ``ves/usd`` falta o viene incompleto, propagamos ``SourceEmptyError``
+        (502) igual que el resto de fuentes, en vez de romper con KeyError/None.
+        """
+        pair = ((response or {}).get("data") or {}).get("ves/usd") or {}
+        buy, sell = pair.get("addValue"), pair.get("withdrawValue")
+        if buy is None or sell is None:
+            raise SourceEmptyError(c.AIRTM_NAME)
+        return [
+            self.createCurrency("USD", "Dolar-Buy", float(buy), c.AIRTM_NAME),
+            self.createCurrency("USD", "Dolar-Sell", float(sell), c.AIRTM_NAME),
+        ]
+
+    async def getCurrenciesByAirtm(self):
+        """Tasas de compra/venta del dólar (USD/VES) según Airtm, serializadas."""
+        with source_guard(c.AIRTM_NAME):
+            response = await self.client.get(endpoints.getAirtmRates())
+            return [self.serialize_with_image(cur) for cur in self._airtm_currencies_from_response(response)]
+
+    async def get_raw_airtm_currencies(self) -> List[Currency]:
+        """Obtiene las tasas USD/VES de Airtm como lista de Currency sin serializar."""
+        with source_guard(c.AIRTM_NAME):
+            response = await self.client.get(endpoints.getAirtmRates())
+            return self._airtm_currencies_from_response(response)
 
     async def _fetch_exchange_monitor_payload(self) -> dict:
         """Obtiene el JSON de tasas de Exchange Monitor (scraping híbrido).
@@ -446,6 +476,7 @@ class DollarService:
             c.YADIO_NAME: c.YADIO_LOGO_URL,
             c.BINANCE_NAME: c.BINANCE_LOGO_URL,
             c.BYBIT_NAME: c.BYBIT_LOGO_URL,
+            c.AIRTM_NAME: c.AIRTM_LOGO_URL,
             c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
         }
         data['platform_img'] = platform_images.get(currency.platform, "")

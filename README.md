@@ -110,13 +110,14 @@ Las principales librerías utilizadas en este proyecto son:
    DATABASE_URL=postgresql://usuario:password@localhost:5432/nombre_db
 
    # Fuentes de datos externas (deben incluir el esquema http:// o https://)
-   OFFICIAL_MARKET_DATA_PROVIDER_URL=https://www.bcv.org.ve      # BCV (tasas oficiales)
-   MARKET_DATA_PROVIDER_A_URL=https://p2p.binance.com           # Binance P2P
-   MARKET_DATA_PROVIDER_B_URL=https://api.yadio.io              # Yadio.io
-   MARKET_DATA_PROVIDER_C_URL=https://api2.bybit.com            # Bybit P2P
-   MARKET_DATA_PROVIDER_D_URL=https://exchangemonitor.net       # Exchange Monitor
+   OFFICIAL_MARKET_DATA_PROVIDER_URL=https://official-provider.example.com
+   MARKET_DATA_PROVIDER_A_URL=https://provider-a.example.com
+   MARKET_DATA_PROVIDER_B_URL=https://provider-b.example.com
+   MARKET_DATA_PROVIDER_C_URL=https://provider-c.example.com
+   MARKET_DATA_PROVIDER_D_URL=https://provider-d.example.com
+   MARKET_DATA_PROVIDER_F_URL=https://provider-f.example.com
    ```
-   > Los valores de las URLs son ejemplos de los proveedores públicos usados por el proyecto; ajústalos según tu entorno. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
+   > Las URLs mostradas son **placeholders**. Coloca las URLs reales de los proveedores solo en tu `.env` local y en las variables del entorno de despliegue (Vercel), nunca en archivos versionados. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 
 5. **Ejecutar migraciones**:
    ```bash
