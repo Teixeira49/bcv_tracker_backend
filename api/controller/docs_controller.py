@@ -9,20 +9,24 @@ router = APIRouter()
 
 @router.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html(request: Request):
+    """Sirve la UI de Swagger personalizada (tema oscuro) de la API."""
     # Accedemos a la instancia de FastAPI a través de request.app
     return get_custom_swagger_html(request.app)
 
 @router.get("/redoc", include_in_schema=False)
 async def custom_redoc_ui_html(request: Request):
+    """Sirve la UI de ReDoc personalizada de la API."""
     return get_custom_redoc_html(request.app)
 
 @router.get("/favicon.ico", include_in_schema=False)
 async def favicon():
+    """Devuelve el favicon estático, o 204 si no existe el archivo."""
     # Resolvemos la ruta a la carpeta static, que está un nivel arriba de controller
     file_path = Path(__file__).parent.parent / "static" / "favicon.ico"
     return FileResponse(file_path) if file_path.exists() else Response(status_code=204)
 
 @router.get("/logo_center.svg", include_in_schema=False)
 async def logo_center():
+    """Devuelve el logo SVG usado por la documentación, o 204 si no existe."""
     file_path = Path(__file__).parent.parent / "static" / "logo_center.svg"
     return FileResponse(file_path, media_type="image/svg+xml") if file_path.exists() else Response(status_code=204)

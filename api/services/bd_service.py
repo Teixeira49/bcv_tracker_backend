@@ -33,7 +33,15 @@ def reset_db():
     init_db()
 
 def save_currencies_to_db(currencies: List[Currency]):
+    """Persiste (upsert) una lista de monedas y calcula su variación (ROC).
 
+    Por cada moneda busca el registro existente con el mismo ``(code, platform)``:
+    si existe, lo actualiza y calcula el cambio porcentual respecto al valor
+    previo; si no, inserta un registro nuevo con ``change = 0.0``. Toda la
+    operación es transaccional (``commit`` al final, ``rollback`` ante error).
+
+    :param currencies: monedas a guardar o actualizar.
+    """
     init_db()
     session = SessionLocal()
     try:
@@ -82,6 +90,11 @@ def save_currencies_to_db(currencies: List[Currency]):
         session.close()
 
 def save_platform_date(platform: str, date_value: str):
+    """Guarda (upsert) la fecha de última actualización de una plataforma.
+
+    :param platform: nombre de la plataforma (p. ej. ``"Banco Central de Venezuela"``).
+    :param date_value: fecha reportada por la fuente, como texto.
+    """
     init_db()
     session = SessionLocal()
     try:
@@ -107,6 +120,12 @@ def save_platform_date(platform: str, date_value: str):
         session.close()
 
 def get_platform_date(platform: str) -> str:
+    """Devuelve la fecha almacenada de una plataforma, o ``None`` si no existe.
+
+    :param platform: nombre de la plataforma a consultar.
+    :return: la fecha guardada como texto, o ``None`` si no hay registro o
+        falla la lectura.
+    """
     session = SessionLocal()
     try:
         row = session.query(PlatformDate).filter(PlatformDate.platform == platform).first()
