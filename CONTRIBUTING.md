@@ -121,6 +121,7 @@ Reglas que el asistente debe respetar en todo el flujo `issue → rama → commi
 | `pagination-enforcement.md` | Uso obligatorio de paginación en endpoints de listado |
 | `schema-naming-convention.md` | Convención de nombres del esquema de base de datos |
 | `database-schema-sync.md` | Sincronización entre modelos y esquema documentado |
+| `documentation-convention.md` | Todo método/endpoint/fuente nuevo nace documentado igual que el resto (docstring, OpenAPI y listas de fuentes sincronizadas) |
 
 #### `roles/` — Expertos especializados
 Personas que orientan al asistente según el tipo de tarea:
