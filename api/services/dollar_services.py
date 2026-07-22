@@ -342,7 +342,7 @@ class DollarService:
             "Content-Type": "application/json"
         }
         with source_guard(c.BITGET_NAME):
-            response = await self.client.post(endpoints.getBitgetP2P(), data=json.dumps(dataPayload), headers=headers, client=client)
+            response = await self._bitget_post_with_retry(dataPayload, headers, client)
             items = (response.get("data") or {}).get("dataList") or []
             prices = [float(item["price"]) for item in items]
             # Igual que Bybit/OKX: sin ofertas no hay nada que promediar. La
@@ -358,31 +358,53 @@ class DollarService:
                 c.BITGET_NAME
             )
 
+    async def _bitget_post_with_retry(self, dataPayload, headers, client):
+        """POST al P2P de Bitget reintentando ante 429 (rate limit por ráfaga).
+
+        Bitget devuelve ``429 Too Many Requests`` con facilidad. Reintenta hasta
+        ``BITGET_MAX_RETRIES`` veces con backoff exponencial, respetando la
+        cabecera ``Retry-After`` si el servidor la envía. Si el 429 persiste tras
+        los reintentos, deja propagar el ``HTTPStatusError`` para que
+        ``source_guard`` lo traduzca a un 502 tipado.
+        """
+        for attempt in range(c.BITGET_MAX_RETRIES + 1):
+            try:
+                return await self.client.post(
+                    endpoints.getBitgetP2P(), data=json.dumps(dataPayload), headers=headers, client=client
+                )
+            except httpx.HTTPStatusError as e:
+                is_429 = e.response.status_code == c.HTTP_TOO_MANY_REQUESTS
+                if not is_429 or attempt == c.BITGET_MAX_RETRIES:
+                    raise
+                retry_after = e.response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after else c.BITGET_RETRY_BACKOFF * (2 ** attempt)
+                except (TypeError, ValueError):
+                    delay = c.BITGET_RETRY_BACKOFF * (2 ** attempt)
+                await asyncio.sleep(delay)
+
     async def get_raw_bitget_currencies(self) -> List[Currency]:
         """Obtiene las tasas de Bitget (USDT/USDC Buy/Sell) con degradación elegante.
 
-        Como Bybit/OKX, el P2P de Bitget en VES puede tener pares sin liquidez.
-        Omitimos los pares que vengan vacíos (``SourceEmptyError``) y devolvemos
-        los que sí tienen ofertas; solo si **ningún** par tiene datos propagamos
-        ``SourceEmptyError`` (502). Cualquier otro fallo (red, parseo) se propaga.
+        A diferencia de las otras fuentes cripto, los 4 pares de Bitget se piden
+        **en serie** (no en ráfaga concurrente): su rate limit devuelve 429 ante
+        4 requests simultáneos al mismo endpoint. Cada request, además, reintenta
+        ante 429 (ver ``_bitget_post_with_retry``). Como Bybit/OKX, el P2P puede
+        tener pares sin liquidez: omitimos los vacíos (``SourceEmptyError``) y solo
+        si **ningún** par tiene datos propagamos ``SourceEmptyError`` (502).
+        Cualquier otro fallo (red, parseo, 429 persistente) se propaga.
         """
+        pairs = [("USDT", "Buy"), ("USDC", "Buy"), ("USDT", "Sell"), ("USDC", "Sell")]
         with source_guard(c.BITGET_NAME):
-            async with httpx.AsyncClient() as client:
-                tasks = [
-                    self.getCurrenciesByBitget(client, "USDT", "VES", "Buy"),
-                    self.getCurrenciesByBitget(client, "USDC", "VES", "Buy"),
-                    self.getCurrenciesByBitget(client, "USDT", "VES", "Sell"),
-                    self.getCurrenciesByBitget(client, "USDC", "VES", "Sell")
-                ]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
-
             currencies = []
-            for res in results:
-                if isinstance(res, SourceEmptyError):
-                    continue  # par sin ofertas: se omite, no tumba la fuente
-                if isinstance(res, BaseException):
-                    raise res  # fallo real (red/parseo/timeout): se propaga
-                currencies.append(res)
+            async with httpx.AsyncClient() as client:
+                for asset, tradeType in pairs:
+                    try:
+                        currencies.append(
+                            await self.getCurrenciesByBitget(client, asset, "VES", tradeType)
+                        )
+                    except SourceEmptyError:
+                        continue  # par sin ofertas: se omite, no tumba la fuente
 
             if not currencies:
                 raise SourceEmptyError(c.BITGET_NAME)
