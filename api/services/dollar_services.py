@@ -209,7 +209,7 @@ class DollarService:
 
         averaged = []
         for code, values in groups.items():
-            name = "Tether" if code == "USDT" else "USD Coin" if code == "USDC" else code
+            name = "Tether" if code == "USDT" else "USD Coin" if code == "USDC" else "Dolar" if code == "USD" else code
             averaged.append(self.createCurrency(code, name, sum(values) / len(values), platform))
         return averaged
 

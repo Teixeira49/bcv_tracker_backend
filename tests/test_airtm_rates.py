@@ -58,6 +58,22 @@ async def test_airtm_sin_par_ves_usd_lanza_error_tipado(payload):
 
 
 @pytest.mark.asyncio
+async def test_airtm_averaged_promedia_buy_y_sell():
+    """average_by_asset colapsa Buy/Sell de Airtm en un único USD promediado."""
+    service = DollarService()
+    service.client.get = AsyncMock(return_value=_payload(add=842.41, withdraw=800.02))
+
+    raw = await service.get_raw_airtm_currencies()
+    averaged = service.average_by_asset(raw, c.AIRTM_NAME)
+
+    assert len(averaged) == 1
+    assert averaged[0].code == "USD"
+    assert averaged[0].name == "Dolar"
+    assert averaged[0].value == (842.41 + 800.02) / 2
+    assert averaged[0].platform == c.AIRTM_NAME
+
+
+@pytest.mark.asyncio
 async def test_airtm_serializado_incluye_logo():
     """getCurrenciesByAirtm serializa e incluye el logo de la plataforma."""
     service = DollarService()

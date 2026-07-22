@@ -313,6 +313,25 @@ async def get_airtm_currencies():
     return api_response(exchange_rate)
 
 @router.get(
+    "/airtm/averaged",
+    summary="Obtiene el promedio de compra y venta del dólar (USD/VES) según Airtm",
+    description="Calcula el precio promedio entre la tasa de compra (agregar fondos) y de venta (retirar) del dólar en Bolívares (VES) que reporta Airtm.",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Promedio de Airtm obtenido exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Promedio de Airtm obtenido exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al promediar tasas de Airtm"},
+        502: {"model": ErrorResponse, "description": "La fuente Airtm no está disponible o no devolvió el par USD/VES"},
+        500: {"model": ErrorResponse, "description": "Error al calcular el promedio de Airtm"}
+    }
+)
+async def get_airtm_averaged():
+    currencies = await dollar_service.get_raw_airtm_currencies()
+    averaged = dollar_service.average_by_asset(currencies, c.AIRTM_NAME)
+    return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
+
+@router.get(
     "/exchange-monitor",
     summary="Obtiene las tasas que reporta Exchange Monitor (valor propio, promedio y mercados)",
     description="Obtiene por scraping las tasas de Exchange Monitor para Venezuela: su valor propio, el promedio estimado y los distintos mercados que agrega (BCV, Monitor Dólar, etc.), con la fecha de actualización del sitio. Como el sitio renderiza las tasas por JavaScript, se resuelve mediante un flujo híbrido (token CSRF del HTML + endpoint de datos JSON).",
