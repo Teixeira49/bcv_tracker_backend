@@ -12,6 +12,8 @@ class DollarEndpoints:
 
     PAR_MKT_D = f'{c.PARALLEL_MARKET_D_URL}/'
 
+    PAR_MKT_E = f'{c.PARALLEL_MARKET_E_URL}/v3/c2c/'
+
     PAR_MKT_F = f'{c.PARALLEL_MARKET_F_URL}/'
 
     # Exchange Monitor renderiza las tasas del lado del cliente: la página HTML
@@ -46,3 +48,7 @@ class DollarEndpoints:
     @classmethod
     def getExchangeMonitorData(cls):
         return cls.PAR_MKT_F + "data/rates/ve"
+
+    @classmethod
+    def getOkxP2P(cls):
+        return cls.PAR_MKT_E + "tradingOrders/books"

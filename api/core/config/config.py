@@ -16,6 +16,8 @@ class Config:
     # D queda asignado a Airtm (rates.airtm.io); Exchange Monitor usa F.
     PARALLEL_MARKET_D_URL = os.getenv("MARKET_DATA_PROVIDER_D_URL")
 
+    PARALLEL_MARKET_E_URL = os.getenv("MARKET_DATA_PROVIDER_E_URL")
+
     PARALLEL_MARKET_F_URL = os.getenv("MARKET_DATA_PROVIDER_F_URL")
 
     # Variables de entorno requeridas para arrancar la app.
@@ -27,6 +29,7 @@ class Config:
         ("MARKET_DATA_PROVIDER_B_URL", True),
         ("MARKET_DATA_PROVIDER_C_URL", True),
         ("MARKET_DATA_PROVIDER_D_URL", True),
+        ("MARKET_DATA_PROVIDER_E_URL", True),
         ("MARKET_DATA_PROVIDER_F_URL", True),
     )
 

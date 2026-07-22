@@ -256,6 +256,74 @@ class DollarService:
                 raise SourceEmptyError(c.BYBIT_NAME)
             return currencies
 
+    async def getCurrenciesByOkx(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
+        # OKX expone su P2P público (C2C) sin auth. El parámetro `side` es la
+        # postura del anunciante: "sell" = comerciantes vendiendo cripto (el
+        # usuario COMPRA) y "buy" = comerciantes comprando (el usuario VENDE).
+        # Mapeamos el mismo `tradeType` ("Buy"/"Sell") que Binance/Bybit para
+        # mantener la simetría del controlador.
+        side = "sell" if tradeType == "Buy" else "buy"
+        params = {
+            "quoteCurrency": fiat,
+            "baseCurrency": asset,
+            "side": side,
+            "paymentMethod": "all",
+            "userType": "all",
+            "receivingAds": "false",
+        }
+        headers = {"User-Agent": "Mozilla/5.0"}
+        with source_guard(c.OKX_NAME):
+            response = await self.client.get(endpoints.getOkxP2P(), params=params, headers=headers, client=client)
+            offers = (response.get("data") or {}).get(side) or []
+            # OKX devuelve el libro completo (no acepta un `rows`/`size` como
+            # Binance/Bybit); nos quedamos con las primeras PAGE_LIMIT ofertas
+            # —las mejores, el libro viene ordenado— para un promedio
+            # representativo del top del mercado y no de la cola.
+            prices = [float(offer["price"]) for offer in offers[:c.PAGE_LIMIT]]
+            # Igual que Bybit: sin ofertas no hay nada que promediar. La degradación
+            # (omitir pares vacíos) se decide arriba, en get_raw_okx_currencies.
+            if not prices:
+                raise SourceEmptyError(c.OKX_NAME)
+            average = sum(prices) / len(prices)
+
+            return self.createCurrency(
+                asset,
+                "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
+                average,
+                c.OKX_NAME
+            )
+
+    async def get_raw_okx_currencies(self) -> List[Currency]:
+        """Obtiene las tasas de OKX (USDT/USDC Buy/Sell) con degradación elegante.
+
+        Como Bybit, el P2P de OKX en VES puede tener pares sin liquidez (p. ej.
+        USDC/Buy vacío en el momento de escribir esto). Omitimos los pares que
+        vengan vacíos (``SourceEmptyError``) y devolvemos los que sí tienen
+        ofertas; solo si **ningún** par tiene datos propagamos
+        ``SourceEmptyError`` (502). Cualquier otro fallo (red, parseo) se propaga.
+        """
+        with source_guard(c.OKX_NAME):
+            async with httpx.AsyncClient() as client:
+                tasks = [
+                    self.getCurrenciesByOkx(client, "USDT", "VES", "Buy"),
+                    self.getCurrenciesByOkx(client, "USDC", "VES", "Buy"),
+                    self.getCurrenciesByOkx(client, "USDT", "VES", "Sell"),
+                    self.getCurrenciesByOkx(client, "USDC", "VES", "Sell")
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            currencies = []
+            for res in results:
+                if isinstance(res, SourceEmptyError):
+                    continue  # par sin ofertas: se omite, no tumba la fuente
+                if isinstance(res, BaseException):
+                    raise res  # fallo real (red/parseo/timeout): se propaga
+                currencies.append(res)
+
+            if not currencies:
+                raise SourceEmptyError(c.OKX_NAME)
+            return currencies
+
     def average_by_asset(self, currencies: List[Currency], platform: str) -> List[Currency]:
         """Promedia por activo las tasas disponibles de una plataforma cripto.
 
@@ -557,6 +625,7 @@ class DollarService:
             c.YADIO_NAME: c.YADIO_LOGO_URL,
             c.BINANCE_NAME: c.BINANCE_LOGO_URL,
             c.BYBIT_NAME: c.BYBIT_LOGO_URL,
+            c.OKX_NAME: c.OKX_LOGO_URL,
             c.AIRTM_NAME: c.AIRTM_LOGO_URL,
             c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
         }

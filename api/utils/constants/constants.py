@@ -11,6 +11,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 *   **Yadio.io**: Tasas del mercado paralelo.
 *   **Binance P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Bybit P2P**: Tasas del mercado cripto (USDT/USDC).
+*   **OKX P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Airtm**: Tasas de compra/venta del dólar (USD/VES).
 *   **Exchange Monitor**: Agregador de mercados (valor propio + promedio estimado + mercados que reporta).
 ### Características Principales:
@@ -104,6 +105,10 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     BYBIT_NAME = 'Bybit'
 
     BYBIT_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/521.png'
+
+    OKX_NAME = 'OKX'
+
+    OKX_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/294.png'
 
     AIRTM_NAME = 'Airtm'
 

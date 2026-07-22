@@ -308,6 +308,45 @@ async def get_bybit_averaged():
     return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
 
 @router.get(
+    "/okx",
+    summary="Obtiene las tasas de USDT y USDC de OKX P2P (Compra/Venta)",
+    description="Consulta el mercado P2P de OKX para obtener las tasas de compra y venta de USDT y USDC en Bolívares (VES). Devuelve los pares con ofertas disponibles: si un par no tiene liquidez en ese momento (p. ej. USDC compra), se omite en vez de romper la respuesta; solo si ninguno tiene ofertas se responde 502.",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Tasas de OKX P2P obtenidas exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas de OKX P2P obtenidas exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar OKX P2P"},
+        502: {"model": ErrorResponse, "description": "La API de OKX P2P no está disponible o no devolvió ofertas para ningún par"},
+        500: {"model": ErrorResponse, "description": "Error al consultar la API de OKX P2P"}
+    }
+)
+async def get_okx_currencies():
+    """Devuelve en vivo las tasas de compra/venta de USDT y USDC en OKX P2P."""
+    currencies = await dollar_service.get_raw_okx_currencies()
+    return api_response([dollar_service.serialize_with_image(cur) for cur in currencies])
+
+@router.get(
+    "/okx/averaged",
+    summary="Obtiene el promedio de compra y venta para USDT y USDC en OKX P2P",
+    description="Calcula el precio promedio entre las órdenes de compra y venta para USDT y USDC en el mercado P2P de OKX. Si un token solo tiene ofertas de un lado (compra o venta), usa el lado disponible; los tokens sin ofertas se omiten.",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Promedios de OKX P2P obtenidos exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Promedios de OKX P2P obtenidos exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al promediar tasas de OKX"},
+        502: {"model": ErrorResponse, "description": "La API de OKX P2P no está disponible o no devolvió ofertas para ningún par"},
+        500: {"model": ErrorResponse, "description": "Error al calcular promedios de OKX"}
+    }
+)
+async def get_okx_averaged():
+    """Devuelve el promedio compra/venta de USDT y USDC en OKX P2P."""
+    currencies = await dollar_service.get_raw_okx_currencies()
+    averaged = dollar_service.average_by_asset(currencies, c.OKX_NAME)
+    return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
+
+@router.get(
     "/airtm",
     summary="Obtiene las tasas de compra y venta del dólar (USD/VES) según Airtm",
     description="Consulta el JSON público de tasas de Airtm (rates.airtm.io) para obtener el valor de compra (agregar fondos) y venta (retirar) del dólar en Bolívares (VES).",
