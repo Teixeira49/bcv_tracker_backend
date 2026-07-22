@@ -86,7 +86,7 @@ try:
     @app.exception_handler(ExternalSourceError)
     async def external_source_error_handler(request: Request, exc: ExternalSourceError):
         # Traduce el fallo de una fuente externa (BCV, Yadio, Binance, Bybit,
-        # Exchange Monitor) al código
+        # Airtm, Exchange Monitor) al código
         # HTTP semántico (408 timeout / 502 fuente caída) usando el envelope de
         # error estándar, en lugar de un 200 con datos vacíos o un 500 confuso.
         return error_response(message=exc.message, status_code=exc.status_code)

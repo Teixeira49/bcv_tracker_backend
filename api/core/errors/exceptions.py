@@ -13,7 +13,7 @@ from api.utils.constants.constants import Constants as c
 
 
 class ExternalSourceError(Exception):
-    """Error base al obtener datos de una fuente externa (BCV, Yadio, Binance, Bybit, Exchange Monitor).
+    """Error base al obtener datos de una fuente externa (BCV, Yadio, Binance, Bybit, Airtm, Exchange Monitor).
 
     Lleva el código HTTP con el que el controlador debe responder
     (``status_code``) y un mensaje legible para el consumidor de la API

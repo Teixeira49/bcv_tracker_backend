@@ -322,6 +322,7 @@ async def get_bybit_averaged():
     }
 )
 async def get_airtm_currencies():
+    """Devuelve las tasas de compra y venta del dólar (USD/VES) de Airtm."""
     exchange_rate = await dollar_service.getCurrenciesByAirtm()
     return api_response(exchange_rate)
 
@@ -340,6 +341,7 @@ async def get_airtm_currencies():
     }
 )
 async def get_airtm_averaged():
+    """Devuelve el promedio compra/venta del dólar (USD/VES) en Airtm."""
     currencies = await dollar_service.get_raw_airtm_currencies()
     averaged = dollar_service.average_by_asset(currencies, c.AIRTM_NAME)
     return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
