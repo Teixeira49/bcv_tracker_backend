@@ -118,6 +118,7 @@ Reglas que el asistente debe respetar en todo el flujo `issue → rama → commi
 | `release-versioning.md` | SemVer, GitHub Releases y mantenimiento del `CHANGELOG.md` |
 | `standard-response.md` | Envelope de respuesta JSON consistente de la API |
 | `constants-centralization.md` | Prohíbe valores "mágicos"; centraliza constantes en `api/utils/constants/` |
+| `environment-variables.md` | Sincroniza `Config`, `.env.example` y README al tocar variables de entorno (solo placeholders, nunca URLs reales) |
 | `pagination-enforcement.md` | Uso obligatorio de paginación en endpoints de listado |
 | `schema-naming-convention.md` | Convención de nombres del esquema de base de datos |
 | `database-schema-sync.md` | Sincronización entre modelos y esquema documentado |
