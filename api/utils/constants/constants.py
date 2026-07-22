@@ -14,6 +14,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 *   **OKX P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Bitget P2P**: Tasas del mercado cripto (USDT/USDC).
 *   **Airtm**: Tasas de compra/venta del dólar (USD/VES).
+*   **DolarAPI**: Agregador del dólar oficial y paralelo (USD/VES).
 *   **Exchange Monitor**: Agregador de mercados (valor propio + promedio estimado + mercados que reporta).
 ### Características Principales:
 *   **Caché inteligente**: Recuperación rápida de datos almacenados.
@@ -118,6 +119,10 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     BITGET_NAME = 'Bitget'
 
     BITGET_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/513.png'
+
+    DOLARAPI_NAME = 'DolarAPI'
+
+    DOLARAPI_LOGO_URL = 'https://www.google.com/s2/favicons?domain=dolarapi.com&sz=128'
 
     EXCHANGE_MONITOR_NAME = 'Exchange Monitor'
 

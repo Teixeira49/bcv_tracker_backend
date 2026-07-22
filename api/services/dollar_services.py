@@ -606,6 +606,43 @@ class DollarService:
             ]
             return currencies
 
+    def _dolarapi_currencies_from_response(self, response) -> List[Currency]:
+        """Construye las tasas USD/VES desde el JSON de DolarAPI (ve.dolarapi.com).
+
+        La respuesta es una lista de entradas por fuente (``oficial``,
+        ``paralelo``, ...). Usamos ``promedio`` como valor; si viniera nulo,
+        promediamos ``compra``/``venta`` disponibles. El nombre distingue la
+        fuente (Oficial/Paralelo). Si ninguna entrada trae un valor usable,
+        propagamos ``SourceEmptyError`` (502), igual que el resto de fuentes.
+        """
+        currencies = []
+        for entry in (response or []):
+            value = entry.get("promedio")
+            if value is None:
+                sides = [v for v in (entry.get("compra"), entry.get("venta")) if v is not None]
+                value = sum(sides) / len(sides) if sides else None
+            if value is None:
+                continue
+            name = entry.get("fuente") or entry.get("nombre") or "USD"
+            currencies.append(
+                self.createCurrency(entry.get("moneda") or "USD", name, float(value), c.DOLARAPI_NAME)
+            )
+        if not currencies:
+            raise SourceEmptyError(c.DOLARAPI_NAME)
+        return currencies
+
+    async def getCurrenciesByDolarApi(self):
+        """Tasas del dólar oficial y paralelo (USD/VES) de DolarAPI, serializadas."""
+        with source_guard(c.DOLARAPI_NAME):
+            response = await self.client.get(endpoints.getDolarApiRates())
+            return [self.serialize_with_image(cur) for cur in self._dolarapi_currencies_from_response(response)]
+
+    async def get_raw_dolarapi_currencies(self) -> List[Currency]:
+        """Obtiene las tasas de DolarAPI como lista de Currency sin serializar."""
+        with source_guard(c.DOLARAPI_NAME):
+            response = await self.client.get(endpoints.getDolarApiRates())
+            return self._dolarapi_currencies_from_response(response)
+
     async def get_raw_binance_currencies(self) -> List[Currency]:
         """Obtiene las 4 tasas de Binance (USDT/USDC Buy/Sell) y devuelve una lista de objetos Currency."""
         with source_guard(c.BINANCE_NAME):
@@ -692,6 +729,7 @@ class DollarService:
             c.OKX_NAME: c.OKX_LOGO_URL,
             c.AIRTM_NAME: c.AIRTM_LOGO_URL,
             c.BITGET_NAME: c.BITGET_LOGO_URL,
+            c.DOLARAPI_NAME: c.DOLARAPI_LOGO_URL,
             c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
         }
         data['platform_img'] = platform_images.get(currency.platform, "")
