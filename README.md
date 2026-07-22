@@ -118,6 +118,7 @@ Las principales librerías utilizadas en este proyecto son:
    MARKET_DATA_PROVIDER_E_URL=https://provider-e.example.com
    MARKET_DATA_PROVIDER_F_URL=https://provider-f.example.com
    MARKET_DATA_PROVIDER_G_URL=https://provider-g.example.com
+   MARKET_DATA_PROVIDER_H_URL=https://provider-h.example.com
    ```
    > Las URLs mostradas son **placeholders**. Coloca las URLs reales de los proveedores solo en tu `.env` local y en las variables del entorno de despliegue (Vercel), nunca en archivos versionados. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 

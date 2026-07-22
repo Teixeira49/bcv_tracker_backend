@@ -386,6 +386,25 @@ async def get_bitget_averaged():
     return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
 
 @router.get(
+    "/dolarapi",
+    summary="Obtiene el dólar oficial y paralelo (USD/VES) según DolarAPI",
+    description="Consulta la API pública de DolarAPI (ve.dolarapi.com) para obtener el valor promedio del dólar oficial y paralelo en Bolívares (VES).",
+    response_model=BaseResponse[List[CurrencySchema]],
+    status_code=status.HTTP_200_OK,
+    response_description="Tasas de DolarAPI obtenidas exitosamente",
+    responses={
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas de DolarAPI obtenidas exitosamente"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al consultar DolarAPI"},
+        502: {"model": ErrorResponse, "description": "La API de DolarAPI no está disponible o no devolvió tasas usables"},
+        500: {"model": ErrorResponse, "description": "Error al consultar la API de DolarAPI"}
+    }
+)
+async def get_dolarapi_currencies():
+    """Devuelve el dólar oficial y paralelo (USD/VES) que reporta DolarAPI."""
+    exchange_rate = await dollar_service.getCurrenciesByDolarApi()
+    return api_response(exchange_rate)
+
+@router.get(
     "/airtm",
     summary="Obtiene las tasas de compra y venta del dólar (USD/VES) según Airtm",
     description="Consulta el JSON público de tasas de Airtm (rates.airtm.io) para obtener el valor de compra (agregar fondos) y venta (retirar) del dólar en Bolívares (VES).",

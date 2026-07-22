@@ -18,6 +18,8 @@ class DollarEndpoints:
 
     PAR_MKT_G = f'{c.PARALLEL_MARKET_G_URL}/v1/p2p/'
 
+    PAR_MKT_H = f'{c.PARALLEL_MARKET_H_URL}/v1/'
+
     # Exchange Monitor renderiza las tasas del lado del cliente: la página HTML
     # solo trae el token CSRF; los valores se piden por separado al endpoint de
     # datos (JSON). Guardamos ambos: la página (para el token + cookie de sesión)
@@ -58,3 +60,7 @@ class DollarEndpoints:
     @classmethod
     def getBitgetP2P(cls):
         return cls.PAR_MKT_G + "pub/adv/queryAdvList"
+
+    @classmethod
+    def getDolarApiRates(cls):
+        return cls.PAR_MKT_H + "dolares"
