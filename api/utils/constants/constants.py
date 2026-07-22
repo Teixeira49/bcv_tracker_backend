@@ -120,6 +120,16 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     BITGET_LOGO_URL = 'https://s2.coinmarketcap.com/static/img/exchanges/128x128/513.png'
 
+    # Bitget aplica un rate limit por ráfaga más estricto que las otras fuentes:
+    # 4 requests concurrentes al mismo endpoint gatillan 429. Por eso sus pares se
+    # piden en serie (no en ráfaga) y cada request reintenta ante 429 con backoff
+    # exponencial (respetando `Retry-After` si viene). Ver fix DT-017.
+    BITGET_MAX_RETRIES = 2
+
+    BITGET_RETRY_BACKOFF = 0.5
+
+    HTTP_TOO_MANY_REQUESTS = 429
+
     DOLARAPI_NAME = 'DolarAPI'
 
     DOLARAPI_LOGO_URL = 'https://www.google.com/s2/favicons?domain=dolarapi.com&sz=128'
