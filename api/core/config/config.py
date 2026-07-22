@@ -20,6 +20,8 @@ class Config:
 
     PARALLEL_MARKET_F_URL = os.getenv("MARKET_DATA_PROVIDER_F_URL")
 
+    PARALLEL_MARKET_G_URL = os.getenv("MARKET_DATA_PROVIDER_G_URL")
+
     # Variables de entorno requeridas para arrancar la app.
     # (nombre_de_variable, requiere_esquema_http)
     _REQUIRED_ENV = (
@@ -31,6 +33,7 @@ class Config:
         ("MARKET_DATA_PROVIDER_D_URL", True),
         ("MARKET_DATA_PROVIDER_E_URL", True),
         ("MARKET_DATA_PROVIDER_F_URL", True),
+        ("MARKET_DATA_PROVIDER_G_URL", True),
     )
 
     @classmethod
