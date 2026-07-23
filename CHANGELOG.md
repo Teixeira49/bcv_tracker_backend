@@ -5,6 +5,24 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y el proyecto sigue [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.1.0] - 2026-07-22
+
+_The Multi-Source Update. Detalle completo en [`docs/release/RELEASE_v2.1.0.md`](docs/release/RELEASE_v2.1.0.md)._
+
+### Added
+- Seis fuentes de tasa nuevas sobre endpoints públicos: **Bybit P2P**, **OKX P2P**, **Bitget P2P**, **Airtm** (+ `/airtm/averaged`), **DolarAPI** y **Exchange Monitor** (scraping híbrido token CSRF + JSON).
+- `update-currencies` y `saved-currencies` aceptan todas las fuentes como activadores independientes (ciclo guardar ↔ releer completo para las 8 fuentes).
+- Filtros `enforce_em_own` / `enforce_em_average` en `saved-currencies` para acotar Exchange Monitor a su valor propio o a su promedio de forma independiente.
+- `.env.example` con las variables requeridas; reglas de tooling `environment-variables` y `documentation-convention`; carpeta `design/` con `themeV2.json`.
+
+### Changed
+- `update-currencies` refactorizado a una tabla de fuentes emparejada con `zip` (elimina el conteo de índices frágil; sin cambio de comportamiento).
+- Docstrings de servicios/endpoints y metadata OpenAPI actualizados con las fuentes.
+
+### Fixed
+- **Bitget 429**: los 4 pares se piden en serie (no en ráfaga) y reintentan ante `429` con backoff (respetando `Retry-After`).
+- Parseo JSON tolerante (`strict=False`) en `HttpClient`: un carácter de control crudo en un anuncio P2P ya no tumba la fuente.
+
 ## [2.0.0] - 2026-07-08
 
 _The Hardening & Versioning Update. Detalle completo en [`docs/release/RELEASE_v2.0.0.md`](docs/release/RELEASE_v2.0.0.md)._
@@ -89,6 +107,7 @@ _The Professionalization Update. Detalle completo en [`docs/release/RELEASE_v1.1
 - Manejo de errores en la importación del router.
 - Simplificación de la lógica de comparación de fechas.
 
+[2.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.0.0...v1.1.0
