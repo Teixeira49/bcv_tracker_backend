@@ -470,7 +470,7 @@ async def get_exchange_monitor_currencies():
     "/update-currencies", 
     tags=["Venezuela | Save Data"], 
     summary="Actualiza y persiste las tasas de cambio en la base de datos",
-    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit, Exchange Monitor). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma. De Exchange Monitor se persisten su valor propio y el promedio estimado.",
+    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit, Airtm, Exchange Monitor). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma. De Exchange Monitor se persisten su valor propio y el promedio estimado.",
     response_model=BaseResponse[UpdateCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Base de datos actualizada correctamente",
@@ -487,16 +487,17 @@ async def update_currencies(
     yadio: bool = Query(True, description="Incluir y guardar tasas de Yadio.io."),
     binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P."),
     bybit: bool = Query(True, description="Incluir y guardar tasas de Bybit P2P."),
+    airtm: bool = Query(True, description="Incluir y guardar tasas de Airtm (compra/venta del dólar)."),
     exchange_monitor: bool = Query(True, description="Incluir y guardar el valor propio y el promedio de Exchange Monitor.")
 ):
     """
-    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance, bybit, exchange_monitor)
+    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance, bybit, airtm, exchange_monitor)
     y actualiza los registros correspondientes en la base de datos.
     """
-    if not any([bcv, yadio, binance, bybit, exchange_monitor]):
+    if not any([bcv, yadio, binance, bybit, airtm, exchange_monitor]):
         raise HTTPException(
             status_code=400,
-            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit, exchange_monitor."
+            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit, airtm, exchange_monitor."
         )
 
     tasks = []
@@ -508,6 +509,8 @@ async def update_currencies(
         tasks.append(dollar_service.get_raw_binance_currencies())
     if bybit:
         tasks.append(dollar_service.get_raw_bybit_currencies())
+    if airtm:
+        tasks.append(dollar_service.get_raw_airtm_currencies())
     if exchange_monitor:
         tasks.append(dollar_service.get_raw_exchange_monitor_currencies())
 
@@ -535,6 +538,10 @@ async def update_currencies(
         result_idx += 1
 
     if bybit:
+        all_currencies.extend(results[result_idx])
+        result_idx += 1
+
+    if airtm:
         all_currencies.extend(results[result_idx])
         result_idx += 1
 

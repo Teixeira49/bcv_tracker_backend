@@ -36,7 +36,7 @@ def test_400_usa_envelope_uniforme():
     """La validación de 'ninguna fuente seleccionada' (400) usa el envelope uniforme."""
     response = client.put(
         f"{c.API_V1_STR}/venezuela/update-currencies",
-        params={"bcv": False, "yadio": False, "binance": False, "bybit": False, "exchange_monitor": False},
+        params={"bcv": False, "yadio": False, "binance": False, "bybit": False, "airtm": False, "exchange_monitor": False},
     )
     assert response.status_code == 400
     _assert_error_envelope(response.json())
