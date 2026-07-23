@@ -576,6 +576,7 @@ async def get_saved_currencies(
     yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
     binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P."),
     bybit: bool = Query(False, description="Incluir tasas guardadas de Bybit P2P."),
+    airtm: bool = Query(False, description="Incluir tasas guardadas de Airtm (compra/venta del dólar)."),
     exchange_monitor: bool = Query(False, description="Incluir tasas guardadas de Exchange Monitor (valor propio + promedio)."),
     fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
     enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
@@ -612,6 +613,11 @@ async def get_saved_currencies(
         db_platforms.append(c.BYBIT_NAME)
     elif fill_missing:
         live_tasks.append(dollar_service.get_raw_bybit_currencies())
+
+    if airtm:
+        db_platforms.append(c.AIRTM_NAME)
+    elif fill_missing:
+        live_tasks.append(dollar_service.get_raw_airtm_currencies())
 
     if exchange_monitor:
         db_platforms.append(c.EXCHANGE_MONITOR_NAME)
