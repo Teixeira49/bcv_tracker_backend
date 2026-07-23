@@ -31,8 +31,9 @@ def test_update_currencies_solo_airtm_persiste(monkeypatch):
 
     # Solo airtm; el resto en False para aislar la fuente.
     r = client.put(UPDATE, params={
-        "bcv": False, "yadio": False, "binance": False,
-        "bybit": False, "exchange_monitor": False, "airtm": True,
+        "bcv": False, "yadio": False, "binance": False, "bybit": False,
+        "okx": False, "bitget": False, "dolarapi": False,
+        "exchange_monitor": False, "airtm": True,
     })
 
     assert r.status_code == 200

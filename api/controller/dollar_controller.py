@@ -470,7 +470,7 @@ async def get_exchange_monitor_currencies():
     "/update-currencies", 
     tags=["Venezuela | Save Data"], 
     summary="Actualiza y persiste las tasas de cambio en la base de datos",
-    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit, Airtm, Exchange Monitor). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma. De Exchange Monitor se persisten su valor propio y el promedio estimado.",
+    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit, OKX, Bitget, Airtm, DolarAPI, Exchange Monitor). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma. De Exchange Monitor se persisten su valor propio y el promedio estimado.",
     response_model=BaseResponse[UpdateCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Base de datos actualizada correctamente",
@@ -487,75 +487,51 @@ async def update_currencies(
     yadio: bool = Query(True, description="Incluir y guardar tasas de Yadio.io."),
     binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P."),
     bybit: bool = Query(True, description="Incluir y guardar tasas de Bybit P2P."),
+    okx: bool = Query(True, description="Incluir y guardar tasas de OKX P2P."),
+    bitget: bool = Query(True, description="Incluir y guardar tasas de Bitget P2P."),
     airtm: bool = Query(True, description="Incluir y guardar tasas de Airtm (compra/venta del dólar)."),
+    dolarapi: bool = Query(True, description="Incluir y guardar tasas de DolarAPI (oficial y paralelo)."),
     exchange_monitor: bool = Query(True, description="Incluir y guardar el valor propio y el promedio de Exchange Monitor.")
 ):
     """
-    Ejecuta el scraping de las fuentes de datos especificadas (bcv, yadio, binance, bybit, airtm, exchange_monitor)
-    y actualiza los registros correspondientes en la base de datos.
+    Ejecuta el scraping/fetch de las fuentes seleccionadas y actualiza los
+    registros correspondientes en la base de datos.
     """
-    if not any([bcv, yadio, binance, bybit, airtm, exchange_monitor]):
+    # (flag, factory de la corrutina raw, plataforma cuya fecha persistir | None).
+    # BCV y Exchange Monitor devuelven {date, currencies} y guardan su fecha; el
+    # resto devuelve una lista de Currency. El orden es irrelevante: se emparejan
+    # resultados con fuentes vía zip (sin índices frágiles).
+    sources = [
+        (bcv, dollar_service.get_raw_bcv_currencies, c.BCV_NAME),
+        (yadio, dollar_service.get_raw_yadio_currencies, None),
+        (binance, dollar_service.get_raw_binance_currencies, None),
+        (bybit, dollar_service.get_raw_bybit_currencies, None),
+        (okx, dollar_service.get_raw_okx_currencies, None),
+        (bitget, dollar_service.get_raw_bitget_currencies, None),
+        (airtm, dollar_service.get_raw_airtm_currencies, None),
+        (dolarapi, dollar_service.get_raw_dolarapi_currencies, None),
+        (exchange_monitor, dollar_service.get_raw_exchange_monitor_currencies, c.EXCHANGE_MONITOR_NAME),
+    ]
+    selected = [(factory, date_platform) for flag, factory, date_platform in sources if flag]
+
+    if not selected:
         raise HTTPException(
             status_code=400,
-            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit, airtm, exchange_monitor."
+            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit, okx, bitget, airtm, dolarapi, exchange_monitor."
         )
 
-    tasks = []
-    if bcv:
-        tasks.append(dollar_service.get_raw_bcv_currencies())
-    if yadio:
-        tasks.append(dollar_service.get_raw_yadio_currencies())
-    if binance:
-        tasks.append(dollar_service.get_raw_binance_currencies())
-    if bybit:
-        tasks.append(dollar_service.get_raw_bybit_currencies())
-    if airtm:
-        tasks.append(dollar_service.get_raw_airtm_currencies())
-    if exchange_monitor:
-        tasks.append(dollar_service.get_raw_exchange_monitor_currencies())
-
-    results = await asyncio.gather(*tasks)
+    results = await asyncio.gather(*(factory() for factory, _ in selected))
 
     all_currencies = []
-    result_idx = 0
-
-    if bcv:
-        bcv_res = results[result_idx]
-        result_idx += 1
-        if isinstance(bcv_res, dict):
-            all_currencies.extend(bcv_res.get("currencies", []))
-            if bcv_res.get("date"):
-                await dollar_service.save_platform_date_async(c.BCV_NAME, bcv_res["date"])
-        elif isinstance(bcv_res, list):
-            all_currencies.extend(bcv_res)
-
-    if yadio:
-        all_currencies.extend(results[result_idx])
-        result_idx += 1
-
-    if binance:
-        all_currencies.extend(results[result_idx])
-        result_idx += 1
-
-    if bybit:
-        all_currencies.extend(results[result_idx])
-        result_idx += 1
-
-    if airtm:
-        all_currencies.extend(results[result_idx])
-        result_idx += 1
-
-    if exchange_monitor:
-        em_res = results[result_idx]
-        result_idx += 1
-        # Como BCV, Exchange Monitor devuelve {date, currencies}: guardamos las
-        # monedas y, si viene, la fecha de actualización de la plataforma.
-        if isinstance(em_res, dict):
-            all_currencies.extend(em_res.get("currencies", []))
-            if em_res.get("date"):
-                await dollar_service.save_platform_date_async(c.EXCHANGE_MONITOR_NAME, em_res["date"])
-        elif isinstance(em_res, list):
-            all_currencies.extend(em_res)
+    for (_, date_platform), res in zip(selected, results):
+        # Fuentes con {date, currencies} (BCV, Exchange Monitor): extraemos las
+        # monedas y persistimos su fecha de plataforma. El resto son listas.
+        if isinstance(res, dict):
+            all_currencies.extend(res.get("currencies", []))
+            if date_platform and res.get("date"):
+                await dollar_service.save_platform_date_async(date_platform, res["date"])
+        elif isinstance(res, list):
+            all_currencies.extend(res)
 
     if not all_currencies:
         return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_currencies": 0})
@@ -583,7 +559,10 @@ async def get_saved_currencies(
     yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
     binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P."),
     bybit: bool = Query(False, description="Incluir tasas guardadas de Bybit P2P."),
+    okx: bool = Query(False, description="Incluir tasas guardadas de OKX P2P."),
+    bitget: bool = Query(False, description="Incluir tasas guardadas de Bitget P2P."),
     airtm: bool = Query(False, description="Incluir tasas guardadas de Airtm (compra/venta del dólar)."),
+    dolarapi: bool = Query(False, description="Incluir tasas guardadas de DolarAPI (oficial y paralelo)."),
     exchange_monitor: bool = Query(False, description="Incluir tasas guardadas de Exchange Monitor (valor propio + promedio)."),
     fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
     enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
@@ -621,10 +600,25 @@ async def get_saved_currencies(
     elif fill_missing:
         live_tasks.append(dollar_service.get_raw_bybit_currencies())
 
+    if okx:
+        db_platforms.append(c.OKX_NAME)
+    elif fill_missing:
+        live_tasks.append(dollar_service.get_raw_okx_currencies())
+
+    if bitget:
+        db_platforms.append(c.BITGET_NAME)
+    elif fill_missing:
+        live_tasks.append(dollar_service.get_raw_bitget_currencies())
+
     if airtm:
         db_platforms.append(c.AIRTM_NAME)
     elif fill_missing:
         live_tasks.append(dollar_service.get_raw_airtm_currencies())
+
+    if dolarapi:
+        db_platforms.append(c.DOLARAPI_NAME)
+    elif fill_missing:
+        live_tasks.append(dollar_service.get_raw_dolarapi_currencies())
 
     if exchange_monitor:
         db_platforms.append(c.EXCHANGE_MONITOR_NAME)
