@@ -560,7 +560,7 @@ async def update_currencies(
     "/saved-currencies", 
     tags=["Venezuela | Save Data"], 
     summary="Recupera las últimas tasas guardadas en la base de datos con filtros avanzados",
-    description="Permite consultar el histórico más reciente de tasas almacenadas. Ofrece filtros por plataforma y opciones para completar datos faltantes en vivo (`fill_missing`), además de forzar el retorno exclusivo del valor del dólar para BCV y Yadio.",
+    description="Permite consultar el histórico más reciente de tasas almacenadas. Ofrece filtros por plataforma y opciones para completar datos faltantes en vivo (`fill_missing`), forzar el retorno exclusivo del valor del dólar para BCV y Yadio, y acotar Exchange Monitor a su valor propio (`enforce_em_own`) o a su promedio (`enforce_em_average`) de forma independiente.",
     response_model=BaseResponse[List[CurrencySchema]],
     status_code=status.HTTP_200_OK,
     response_description="Tasas históricas/guardadas recuperadas exitosamente",
@@ -579,7 +579,9 @@ async def get_saved_currencies(
     exchange_monitor: bool = Query(False, description="Incluir tasas guardadas de Exchange Monitor (valor propio + promedio)."),
     fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
     enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
-    enforce_yadio_dollar: bool = Query(False, description="Si es True, filtra resultados de Yadio para mostrar solo el Dólar.")
+    enforce_yadio_dollar: bool = Query(False, description="Si es True, filtra resultados de Yadio para mostrar solo el Dólar."),
+    enforce_em_own: bool = Query(False, description="Si es True, filtra Exchange Monitor para mostrar solo su valor propio (\"Exchange Monitor\")."),
+    enforce_em_average: bool = Query(False, description="Si es True, filtra Exchange Monitor para mostrar solo su promedio estimado (\"Monitor Dólar\").")
 ):
     """
     Retorna las últimas tasas de cambio guardadas en la base de datos.
@@ -644,6 +646,17 @@ async def get_saved_currencies(
                 results.append(dollar_service.serialize_with_image(currency))
 
     # 3. Filtrado por enforce flags
+    # Exchange Monitor persiste dos entradas ("Exchange Monitor" = valor propio,
+    # code `em`; "Monitor Dólar" = promedio, code `average`). Los flags
+    # enforce_em_* son independientes: cada uno habilita su code; si ninguno está
+    # activo no se filtra (ambas pasan); si ambos están activos pasan ambas.
+    em_allowed_codes = set()
+    if enforce_em_own:
+        em_allowed_codes.add(c.EM_CODE_OWN)
+    if enforce_em_average:
+        em_allowed_codes.add(c.EM_CODE_AVERAGE)
+    enforce_em = bool(em_allowed_codes)
+
     final_results = []
     for item in results:
         # Filtro BCV: Si enforce está activo y es BCV, solo pasa si el nombre es "Dolar"
@@ -651,6 +664,10 @@ async def get_saved_currencies(
             continue
         # Filtro Yadio: Si enforce está activo y es Yadio, solo pasa si el nombre es "Dolar"
         if enforce_yadio_dollar and item.get('platform') == c.YADIO_NAME and item.get('name') != "Dolar":
+            continue
+        # Filtro Exchange Monitor: si algún enforce_em_* está activo, solo pasan
+        # las entradas de EM cuyo code esté habilitado.
+        if enforce_em and item.get('platform') == c.EXCHANGE_MONITOR_NAME and item.get('code') not in em_allowed_codes:
             continue
         final_results.append(item)
 

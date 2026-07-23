@@ -163,6 +163,14 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     EM_ID_AVERAGE = 've-average'
 
+    # Códigos persistidos de las dos entradas propias de Exchange Monitor (el id
+    # sin el prefijo de país). Se usan para filtrarlas de forma independiente en
+    # saved-currencies: EM_CODE_OWN → "Exchange Monitor", EM_CODE_AVERAGE →
+    # "Monitor Dólar".
+    EM_CODE_OWN = 'em'
+
+    EM_CODE_AVERAGE = 'average'
+
     # Claves del payload JSON de Exchange Monitor.
     EM_KEY_SUCCESS = 'success'
 
