@@ -11,8 +11,12 @@ from api.services.bd_service import save_currencies_to_db, save_platform_date, g
 from api.utils.constants.constants import Constants as c
 from api.utils.constants.scrapping_tags import ScrappingTags as tag
 from api.utils.helpers.helper import Helper
+from api.core.logging.logger import get_logger
 
 from api.services.dollar_endpoints import DollarEndpoints as endpoints
+
+logger = get_logger("services.dollar")
+
 
 class DollarService:
     def __init__(self):
@@ -561,8 +565,8 @@ class DollarService:
                 serialized_data['id'] = r.id  # Añadimos el ID que no está en to_dict()
                 result.append(serialized_data)
             return result
-        except Exception as e:
-            print(f"An error occurred while fetching saved currencies: {e}")
+        except Exception:
+            logger.exception("Error al obtener las monedas guardadas de la BD")
             return []
         finally:
             session.close()
