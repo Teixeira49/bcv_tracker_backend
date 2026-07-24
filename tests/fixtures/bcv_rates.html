@@ -1,0 +1,45 @@
+<!--
+  Fixture HTML "grabado" del portal del BCV (recorte representativo).
+  Reproduce la estructura real que parsea el scraper (api/services/dollar_services.py):
+   - la fecha de vigencia vive en un elemento class="date-display-single" con
+     el valor en el atributo `content` (ScrappingTags.CLASS_DATE / KEY_DATE);
+   - cada divisa es un bloque class="col-sm-12 col-xs-12" (CLASS_CURRENCY) cuyo
+     `id` es el nombre (KEY_NAME), con un <span> para el código (CLASS_CODE) y un
+     <strong> para el valor en formato local con coma decimal (CLASS_NAME).
+  Los valores son ilustrativos; sirven para fijar el contrato de parseo.
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><title>BCV</title></head>
+<body>
+  <div class="pull-right dinpro-medium">
+    <span class="date-display-single" property="dc:date" datatype="xsd:dateTime"
+          content="2026-07-24T00:00:00-04:00">Jueves, 24 Julio 2026</span>
+  </div>
+
+  <div id="dolar" class="col-sm-12 col-xs-12">
+    <div class="col-sm-6 col-xs-6"><span>USD</span></div>
+    <div class="col-sm-6 col-xs-6 centrado"><strong> 782,74000000 </strong></div>
+  </div>
+
+  <div id="euro" class="col-sm-12 col-xs-12">
+    <div class="col-sm-6 col-xs-6"><span>EUR</span></div>
+    <div class="col-sm-6 col-xs-6 centrado"><strong> 850,12000000 </strong></div>
+  </div>
+
+  <div id="yuan" class="col-sm-12 col-xs-12">
+    <div class="col-sm-6 col-xs-6"><span>CNY</span></div>
+    <div class="col-sm-6 col-xs-6 centrado"><strong> 108,45000000 </strong></div>
+  </div>
+
+  <div id="lira" class="col-sm-12 col-xs-12">
+    <div class="col-sm-6 col-xs-6"><span>TRY</span></div>
+    <div class="col-sm-6 col-xs-6 centrado"><strong> 19,52000000 </strong></div>
+  </div>
+
+  <div id="rublo" class="col-sm-12 col-xs-12">
+    <div class="col-sm-6 col-xs-6"><span>RUB</span></div>
+    <div class="col-sm-6 col-xs-6 centrado"><strong> 9,87000000 </strong></div>
+  </div>
+</body>
+</html>
