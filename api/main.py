@@ -89,7 +89,7 @@ try:
     # Intenta importar tus módulos normalmente
     from api.utils.html.root_html import root_html
     from api.utils.constants.constants import Constants as c
-    from api.controller.dollar_controller import router as controller_app
+    from api.controller.venezuela_controller import router as controller_app
     from api.utils.constants.tags_metadata import tags_metadata
     from api.controller.docs_controller import router as docs_router
     from api.controller.health_controller import router as health_router

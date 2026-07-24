@@ -23,7 +23,7 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.controller import dollar_controller
+from api.controller import venezuela_controller
 from api.core.response.response_wrapper import api_response
 from api.utils.constants.constants import Constants as c
 
@@ -59,7 +59,7 @@ def test_all_business_routes_declare_response_model():
     Garantiza que el contrato documentado en OpenAPI existe para toda operación
     (base del guardrail: sin ``response_model`` no hay nada que FastAPI enforce).
     """
-    routes = [r for r in dollar_controller.router.routes if isinstance(r, APIRoute)]
+    routes = [r for r in venezuela_controller.router.routes if isinstance(r, APIRoute)]
     assert routes, "el router de Venezuela no expone rutas"
     sin_modelo = [f"{sorted(r.methods)} {r.path}" for r in routes if r.response_model is None]
     assert not sin_modelo, f"rutas sin response_model: {sin_modelo}"
@@ -72,7 +72,7 @@ def test_response_model_filters_extra_fields(monkeypatch):
     que no pertenece a ``CurrencySchema`` no debe aparecer en la salida real.
     """
     monkeypatch.setattr(
-        dollar_controller.dollar_service, "getCurrenciesByYadio",
+        venezuela_controller.dollar_service, "getCurrenciesByYadio",
         AsyncMock(return_value=[{
             "code": "USD", "name": "Dolar", "platform": c.YADIO_NAME,
             "value": 100.0, "change": 0.0,
@@ -97,7 +97,7 @@ def test_response_model_rejects_shape_drift(monkeypatch):
     de modo que el drift se detecta en vez de servirse silenciosamente.
     """
     monkeypatch.setattr(
-        dollar_controller.dollar_service, "getCurrenciesByYadio",
+        venezuela_controller.dollar_service, "getCurrenciesByYadio",
         AsyncMock(return_value=[{"code": "USD"}]),  # faltan campos requeridos
     )
 

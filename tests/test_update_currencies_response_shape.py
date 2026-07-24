@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
-import api.controller.dollar_controller as ctrl
+import api.controller.venezuela_controller as ctrl
 import api.main as main
 from api.utils.constants.constants import Constants as c
 
