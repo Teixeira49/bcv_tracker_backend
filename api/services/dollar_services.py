@@ -19,6 +19,21 @@ logger = get_logger("services.dollar")
 
 
 class DollarService:
+    # Mapa plataforma -> logo. Se define una sola vez a nivel de clase (no se
+    # reconstruye en cada llamada a ``serialize_with_image``, que corre por cada
+    # moneda del path caliente de serialización).
+    PLATFORM_IMAGES = {
+        c.BCV_NAME: c.BCV_LOGO_URL,
+        c.YADIO_NAME: c.YADIO_LOGO_URL,
+        c.BINANCE_NAME: c.BINANCE_LOGO_URL,
+        c.BYBIT_NAME: c.BYBIT_LOGO_URL,
+        c.OKX_NAME: c.OKX_LOGO_URL,
+        c.AIRTM_NAME: c.AIRTM_LOGO_URL,
+        c.BITGET_NAME: c.BITGET_LOGO_URL,
+        c.DOLARAPI_NAME: c.DOLARAPI_LOGO_URL,
+        c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL,
+    }
+
     def __init__(self):
         self.client = HttpClient()
         self.helper = Helper()
@@ -735,29 +750,21 @@ class DollarService:
         :param change: variación porcentual (ROC); ``0.0`` si no aplica.
         :return: instancia ``Currency`` lista para serializar o persistir.
         """
+        # Una única fuente de tiempo (self.helper), reutilizada para ambas
+        # fechas, en lugar de instanciar Helper() dos veces por moneda.
+        now = self.helper.getZoneTime()
         return Currency(
             code=code.strip(),
             name=name.strip().capitalize(),
             platform=platform,
             value=value,
             change=change,
-            createDate=Helper().getZoneTime(),
-            updateDate=Helper().getZoneTime()
+            createDate=now,
+            updateDate=now
         )
 
     def serialize_with_image(self, currency: Currency) -> dict:
         """Serializa el objeto Currency y añade el link de la imagen de la plataforma."""
         data = currency.to_dict()
-        platform_images = {
-            c.BCV_NAME: c.BCV_LOGO_URL,
-            c.YADIO_NAME: c.YADIO_LOGO_URL,
-            c.BINANCE_NAME: c.BINANCE_LOGO_URL,
-            c.BYBIT_NAME: c.BYBIT_LOGO_URL,
-            c.OKX_NAME: c.OKX_LOGO_URL,
-            c.AIRTM_NAME: c.AIRTM_LOGO_URL,
-            c.BITGET_NAME: c.BITGET_LOGO_URL,
-            c.DOLARAPI_NAME: c.DOLARAPI_LOGO_URL,
-            c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
-        }
-        data['platform_img'] = platform_images.get(currency.platform, "")
+        data['platform_img'] = self.PLATFORM_IMAGES.get(currency.platform, "")
         return data
