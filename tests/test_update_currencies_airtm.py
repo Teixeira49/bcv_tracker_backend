@@ -29,12 +29,8 @@ def test_update_currencies_solo_airtm_persiste(monkeypatch):
     saved = AsyncMock(return_value={"message": "ok", "updated_count": 2})
     monkeypatch.setattr(venezuela_controller.dollar_service, "save_currencies_to_db_async", saved)
 
-    # Solo airtm; el resto en False para aislar la fuente.
-    r = client.put(UPDATE, params={
-        "bcv": False, "yadio": False, "binance": False, "bybit": False,
-        "okx": False, "bitget": False, "dolarapi": False,
-        "exchange_monitor": False, "airtm": True,
-    })
+    # Body por mercado: solo airtm en vivo (todas), el resto ausente = off.
+    r = client.put(UPDATE, json={"markets": {"airtm": "todas"}})
 
     assert r.status_code == 200
     args, _ = saved.call_args

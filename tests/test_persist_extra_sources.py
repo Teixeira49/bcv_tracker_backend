@@ -1,11 +1,11 @@
 """OKX, Bitget y DolarAPI persistibles/consultables en ambos endpoints de datos.
 
+Con el Body por mercado (#71):
 - `PUT /update-currencies`: las 3 fuentes nuevas se recolectan y guardan; una
-  fuente con {date, currencies} (BCV) sigue persistiendo su fecha (valida el
-  refactor a tabla `sources` + zip).
-- `GET /saved-currencies`: las 3 fuentes nuevas llegan a la consulta de BD.
+  fuente con {date, currencies} (BCV) sigue persistiendo su fecha.
+- `POST /saved-currencies`: las 3 fuentes nuevas se leen de la BD (bd-todas).
 """
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
@@ -36,10 +36,10 @@ def test_update_persiste_okx_bitget_dolarapi_y_fecha_bcv(monkeypatch):
     save_date = AsyncMock()
     monkeypatch.setattr(svc, "save_platform_date_async", save_date)
 
-    r = client.put(UPDATE, params={
-        "bcv": True, "okx": True, "bitget": True, "dolarapi": True,
-        "yadio": False, "binance": False, "bybit": False, "airtm": False, "exchange_monitor": False,
-    })
+    # Body: BCV todas (en vivo), OKX/Bitget ambas (buy+sell), DolarAPI todas.
+    r = client.put(UPDATE, json={"markets": {
+        "bcv": "todas", "okx": "ambas", "bitget": "ambas", "dolarapi": "todas",
+    }})
 
     assert r.status_code == 200
     stored = saved.call_args[0][0]
@@ -51,13 +51,15 @@ def test_update_persiste_okx_bitget_dolarapi_y_fecha_bcv(monkeypatch):
 
 
 def test_saved_currencies_selecciona_okx_bitget_dolarapi(monkeypatch):
-    saved = AsyncMock(return_value=[])
-    monkeypatch.setattr(svc, "getSavedCurrencies", saved)
+    fetch = MagicMock(return_value=[])
+    monkeypatch.setattr(svc, "_fetch_saved_for_platform", fetch)
 
-    r = client.get(SAVED, params={"okx": True, "bitget": True, "dolarapi": True})
+    r = client.post(SAVED, json={"markets": {
+        "okx": "bd-todas", "bitget": "bd-todas", "dolarapi": "bd-todas",
+    }})
 
     assert r.status_code == 200
-    platforms = saved.call_args.kwargs["platforms"]
-    assert c.OKX_NAME in platforms
-    assert c.BITGET_NAME in platforms
-    assert c.DOLARAPI_NAME in platforms
+    read_platforms = {call.args[0] for call in fetch.call_args_list}
+    assert c.OKX_NAME in read_platforms
+    assert c.BITGET_NAME in read_platforms
+    assert c.DOLARAPI_NAME in read_platforms

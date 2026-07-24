@@ -93,18 +93,30 @@ async def test_getSavedCurrencies_no_bloquea_el_event_loop(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_getSavedCurrencies_serializa_filas_con_id_y_logo(monkeypatch):
-    """El resultado incluye id + platform_img y respeta el orden de las filas."""
-    service = DollarService()
-    rows = [
-        _make_currency(service, "USD", c.BCV_NAME, 100.0, cid=2),
-        _make_currency(service, "EUR", c.BCV_NAME, 110.0, cid=1),
-    ]
-    monkeypatch.setattr(
-        "api.services.dollar_services.SessionLocal", lambda: _FakeSession(rows)
-    )
+    """El resultado incluye id + platform_img y respeta el orden (id desc)."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from api.models.bd_currency import Base, Currency
 
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    seed = factory()
+    seed.add(Currency(code="EUR", name="Euro", platform=c.BCV_NAME, value=110.0))   # id 1
+    seed.add(Currency(code="USD", name="Dolar", platform=c.BCV_NAME, value=100.0))  # id 2
+    seed.commit()
+    seed.close()
+    monkeypatch.setattr("api.services.dollar_services.SessionLocal", factory)
+
+    service = DollarService()
     result = await service.getSavedCurrencies(platforms=[c.BCV_NAME])
 
+    # Última por (code, platform), ordenado por id desc.
     assert [r["id"] for r in result] == [2, 1]
     assert [r["code"] for r in result] == ["USD", "EUR"]
     assert all(r["platform_img"] == c.BCV_LOGO_URL for r in result)
