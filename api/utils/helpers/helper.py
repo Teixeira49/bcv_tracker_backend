@@ -47,17 +47,3 @@ class Helper:
         if previous and previous != 0:
             return ((current - previous) / previous) * 100
         return 0.0
-
-    def validateDate(self, date_str: str) -> bool:
-        """Indica si ``date_str`` (ISO) corresponde a la fecha de hoy en Caracas.
-
-        :param date_str: fecha en formato ISO 8601.
-        :return: ``True`` si es la fecha actual; ``False`` si difiere o el
-            formato es inválido.
-        """
-        try:
-            date_from_bcv = datetime.fromisoformat(date_str).date()
-            return date_from_bcv == Helper().getZoneTime().date()
-        except ValueError:
-            print("Invalid date format")
-            return False
