@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, Field
 import asyncio
 from typing import List
 from api.models.schemas import BaseResponse, CurrencySchema, BcvResponseData, AllCurrenciesResponseData, UpdateCurrenciesResponseData, ErrorResponse
@@ -15,9 +14,6 @@ from api.utils.constants.constants import Constants as c
 router = APIRouter(prefix="/venezuela", tags=["Venezuela"])
 
 dollar_service = DollarService() # Crea una instancia de DollarService
-
-class FilterParams:
-    actualRate: bool = Field(True)
 
 # ============================================================================================
 #  >> Obtener informacion de dolares inmediata de distintos mercados
