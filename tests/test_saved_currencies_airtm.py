@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.controller import dollar_controller
+from api.controller import venezuela_controller
 from api.utils.constants.constants import Constants as c
 
 
@@ -24,7 +24,7 @@ def _airtm(name):
 
 def test_airtm_true_consulta_y_devuelve_airtm(monkeypatch):
     saved = AsyncMock(return_value=[_airtm("Dolar-Buy"), _airtm("Dolar-Sell")])
-    monkeypatch.setattr(dollar_controller.dollar_service, "getSavedCurrencies", saved)
+    monkeypatch.setattr(venezuela_controller.dollar_service, "getSavedCurrencies", saved)
 
     r = client.get(SAVED, params={"airtm": True})
 

@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.controller import dollar_controller
+from api.controller import venezuela_controller
 from api.utils.constants.constants import Constants as c
 
 
 client = TestClient(app, raise_server_exceptions=False)
-svc = dollar_controller.dollar_service
+svc = venezuela_controller.dollar_service
 
 UPDATE = f"{c.API_V1_STR}/venezuela/update-currencies"
 SAVED = f"{c.API_V1_STR}/venezuela/saved-currencies"

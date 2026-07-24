@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.controller import dollar_controller
+from api.controller import venezuela_controller
 from api.utils.constants.constants import Constants as c
 
 
@@ -36,7 +36,7 @@ def mock_saved(monkeypatch):
         _em(c.EM_CODE_AVERAGE, "Monitor Dólar"),
         _bcv(),
     ]
-    monkeypatch.setattr(dollar_controller.dollar_service, "getSavedCurrencies", AsyncMock(return_value=rows))
+    monkeypatch.setattr(venezuela_controller.dollar_service, "getSavedCurrencies", AsyncMock(return_value=rows))
 
 
 def _names(body):
