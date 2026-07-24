@@ -21,21 +21,23 @@ No se llama `APIResponse`: el nombre real y en uso en todo el proyecto es **`Bas
 ## Reglas
 
 1. **Nunca** devuelvas datos "pelados" (un dict crudo, una lista, o una instancia de la BD) sin envolver. Siempre pasan por el envelope.
-2. **Siempre** declara `response_model=BaseResponse[T]` en el decorador del router (donde `T` es el schema del payload, ej. `BcvResponseData`, `List[CurrencySchema]`). Esto alimenta la documentación de Swagger/OpenAPI.
-3. **Siempre** construye el cuerpo con el helper `api_response(...)` de `api/core/response/response_wrapper.py`, que arma el envelope por ti. El `data` que le pasas es el payload (dict, lista o modelo) que quedará bajo la clave `data`.
-4. Para los **errores** usa `raise HTTPException(...)` y declara el modelo `ErrorResponse` en el `responses={...}` del decorador (ej. `408`, `500`).
+2. **Siempre** declara `response_model=BaseResponse[T]` en el decorador del router (donde `T` es el schema del payload, ej. `BcvResponseData`, `List[CurrencySchema]`). Esto alimenta la documentación de Swagger/OpenAPI **y** la validación/serialización en runtime.
+3. **Siempre** construye el cuerpo con el helper `api_response(...)` de `api/core/response/response_wrapper.py`, que arma el envelope por ti, y **retórnalo directamente** (`return api_response(...)`). El `data` que le pasas es el payload (dict, lista o modelo) que quedará bajo la clave `data`.
+4. **Nunca** devuelvas un `Response` crudo (`JSONResponse`, etc.) desde un endpoint que declare `response_model`: FastAPI **omite** la validación cuando recibe un `Response`, y el `response_model` quedaría como mera documentación (drift doc-vs-realidad). El helper `api_response` devuelve un **dict** justamente para evitarlo.
+5. Para los **errores** usa `raise HTTPException(...)` y declara el modelo `ErrorResponse` en el `responses={...}` del decorador (ej. `408`, `500`). Los *exception handlers* globales (`api/main.py`) sí devuelven un `Response` vía `error_response`, porque Starlette lo exige a ese nivel; eso es correcto y no contradice la regla 4 (que aplica a los endpoints).
 
 ## El helper `api_response`
 
 ```python
-def api_response(data=None, detail=c.STATUS_OK_MSG, message=c.STATUS_OK_DEATILS, status_code=c.STATUS_OK):
-    ...  # retorna un JSONResponse con {"status": detail, "message": message, "data": data}
+def api_response(data=None, detail=c.STATUS_OK_MSG, message=c.STATUS_OK_DEATILS):
+    ...  # retorna un dict {"status": detail, "message": message, "data": data}
 ```
 
+- **Devuelve un `dict`, no un `Response`.** Al retornar ese dict desde el endpoint, FastAPI aplica el `response_model=BaseResponse[T]` declarado: lo valida, lo serializa y **filtra** los campos ajenos al schema. Así la salida real coincide con el contrato de OpenAPI.
 - `data`: el payload. Si es `None`, la clave `data` se omite.
 - `detail`: rellena el campo `status` del envelope (por defecto `"Success"`).
 - `message`: mensaje de la operación.
-- `status_code`: código HTTP (por defecto `200`).
+- El **código HTTP** lo gobierna el decorador de la ruta (`status_code=...`), no este helper.
 
 ## Ejemplos
 
@@ -71,10 +73,21 @@ async def get_bcv_currencies():
 
 ## Nota importante sobre la validación
 
-Como `api_response` devuelve un `JSONResponse` directamente, FastAPI **no aplica el `response_model` en runtime**: solo lo usa para generar la documentación. Es decir, el `response_model` documenta la forma, pero **no la valida ni la serializa** automáticamente. Por eso:
+Como `api_response` devuelve un **dict** (no un `Response`), FastAPI **sí aplica el `response_model` en runtime**: valida el envelope contra `BaseResponse[T]`, lo serializa y filtra los campos ajenos al schema. La salida real queda garantizada y coincide con el contrato de OpenAPI (issue #18). Consecuencias prácticas:
 
-- Eres tú quien debe asegurar que el `data` que pasas coincide exactamente con el `T` declarado en `response_model`. Si la forma se desvía, Swagger dirá una cosa y la API responderá otra, sin error.
-- Serializa manualmente los tipos no-JSON antes de pasarlos (ej. `datetime` como `str`), ya que el `JSONResponse` no los convierte solo. Ver `serialize_with_image` en el servicio y los campos `Optional[str]` de `CurrencySchema` (`createDate`, `updateDate`) como referencia.
+- Si el `data` que pasas **no** cumple el `T` declarado, FastAPI lanza un `ResponseValidationError` (HTTP 500) en vez de servir silenciosamente una forma incorrecta. Es deseable: el drift se detecta en desarrollo/CI, no en producción.
+- Los tipos deben ser serializables/coercibles por Pydantic. Sigue serializando los `datetime` como `str` antes de pasarlos (ver `serialize_with_image` y los `Optional[str]` `createDate`/`updateDate` de `CurrencySchema`): el schema los espera como texto.
+- Los campos `Optional` del schema que no proveas aparecerán como `null` en la salida (p. ej. `id` en datos en vivo), porque ahora la respuesta se serializa contra el modelo.
+
+### Guardrail (para no reintroducir el drift)
+
+`tests/test_response_model_contract.py` fija este contrato y **fallará** si se rompe:
+
+- `api_response` debe devolver un `dict` (no un `Response`).
+- toda ruta de negocio debe declarar `response_model`.
+- FastAPI debe filtrar los campos ajenos al schema y rechazar (500) los payloads que no lo cumplan.
+
+Al agregar o modificar un endpoint, mantén verde ese archivo (corre `pytest`).
 
 ## Excepciones
 

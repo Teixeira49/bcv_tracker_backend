@@ -22,8 +22,11 @@ De ahí se obtienen:
 - `branchProjectCode`: iniciales del proyecto usadas en el ID de rama (ver `branch-naming.md`). Por defecto `DT` (DolarTracker).
 - `baseBranch`: rama destino por defecto de las PR (todo lo que no sea hotfix). Por defecto `development`.
 - `productionBranch`: rama de producción, destino de los hotfixes. Por defecto `main`.
+- `assignSelf`: si es `true`, **toda** PR se auto-asigna al autor (ver "Asignación automática"). Por defecto `true`.
+- `selfAssignee`: usuario de GitHub que se asigna cuando `assignSelf` es `true`. Si falta, se usa `@me` (el usuario autenticado en `gh`).
+- `labelsByType`: mapa `tipo-de-rama → label` que se aplica automáticamente a cada PR (ver "Labels").
 
-En este repositorio el archivo ya existe en `.claude/pr-config.json` con `triggerMode: "manual"`, `draftsDir: "docs/pull-requests/"`, `reviewers: []`, `branchProjectCode: "DT"`, `baseBranch: "development"` y `productionBranch: "main"`. Si por algún motivo no existiera, asume esos mismos valores por defecto e informa al usuario de que conviene crearlo.
+En este repositorio el archivo ya existe en `.claude/pr-config.json` con `triggerMode: "ask"`, `draftsDir: "docs/pull-requests/"`, `reviewers: []`, `branchProjectCode: "DT"`, `baseBranch: "development"`, `productionBranch: "main"`, `assignSelf: true`, `selfAssignee: "Teixeira49"` y el mapa `labelsByType`. Si por algún motivo no existiera, asume esos mismos valores por defecto e informa al usuario de que conviene crearlo.
 
 ## Información requerida
 
@@ -248,7 +251,9 @@ Describa las pruebas que ejecutó para verificar los cambios. Proporcione instru
 - [ ] Mis cambios no generan nuevas advertencias
 - [ ] Mis cambios pasan el build y lint del proyecto localmente
 - [ ] He agregado pruebas que prueban que mi solución es efectiva o que mi función funciona
+- [ ] Si agregué o modifiqué un endpoint o una fuente de tasa, incluí sus tests en este mismo PR (ver `test-coverage.md`)
 - [ ] Las pruebas unitarias nuevas y existentes pasan localmente con mis cambios
+- [ ] La suite `pytest` corre en verde en CI (`.github/workflows/tests.yml`)
 ```
 
 Pautas de llenado (usa el objetivo/criterios del issue vinculado —si existe— + los commits):
@@ -260,13 +265,40 @@ Pautas de llenado (usa el objetivo/criterios del issue vinculado —si existe—
 ## Otras configuraciones
 
 ### Labels
-- En modo `auto`: asigna las labels que tengan más sentido lógico con la naturaleza de los cambios (ej. cambios solo en docs → label de documentación; corrección de bug → label de bug). Infiere a partir de los archivos editados, el tipo de la rama y los commits.
-- En modo `ask`: **propón** esas labels en el chat para que el usuario las apruebe junto con la PR.
+Toda PR se etiqueta automáticamente, **en cualquier `triggerMode`**, según el tipo de la rama:
+
+1. **Label por tipo (obligatoria):** aplica la label de `labelsByType[<tipo-de-rama>]` de `.claude/pr-config.json`. El mapa actual es:
+
+   | Tipo de rama | Label |
+   |---|---|
+   | `feat` | `enhancement` |
+   | `fix` / `hotfix` | `bug` |
+   | `refactor` | `refactor` |
+   | `docs` | `documentation` |
+   | `chore` | `chore` |
+   | `build` | `build` |
+   | `test` | `test` |
+   | `ci` | `ci` |
+   | `style` | `style` |
+   | `perf` | `performance` |
+
+2. **Labels adicionales por contexto:** añade también las que tengan sentido con la naturaleza real del cambio, infiriéndolas de los archivos tocados, los commits y, sobre todo, **las labels del issue vinculado** (p. ej. un issue con `security` o `performance` propaga esa label a la PR). Ej.: `chore` + `security`, o `refactor` + `performance`.
+
+3. Si una label del mapa no existe en el repo, créala con `gh label create` (o avisa) antes de aplicarla; nunca falles la subida por una label faltante.
+
+Comportamiento por modo:
+- `auto`: aplica las labels sin preguntar.
+- `ask`: **propón** las labels en el chat junto con la PR; aplícalas al subir tras la aprobación.
+
+### Asignación (assignee)
+- Si `assignSelf` es `true` (por defecto), **toda** PR se auto-asigna a `selfAssignee` (o `@me` si no está definido), en cualquier `triggerMode`. Es la persona responsable de dar seguimiento/probar la PR.
+- El *assignee* es independiente del *reviewer*: uno indica responsable, el otro revisor.
 
 ### Reviewers
 - Los reviewers candidatos del equipo viven en `.claude/pr-config.json`, en la clave `reviewers` (un array que puede contener varios nombres/usuarios de GitHub).
 - En modo `ask`: muestra esa lista de candidatos para que el usuario elija.
 - En modo `auto`: deja los reviewers **vacíos por defecto**. Solo añade un reviewer si su nombre/usuario coincide con alguno de la lista `reviewers` configurada y tiene sentido para el cambio. Si la lista está vacía o no hay coincidencia, no asignes reviewers.
+- Nota: GitHub no permite asignarse a uno mismo como reviewer de la propia PR; por eso el auto-seguimiento se hace vía *assignee*, no vía *reviewer*.
 
 ## Cómo subir la PR (modos `ask` aprobado y `auto`)
 
@@ -274,9 +306,15 @@ Usa la herramienta disponible, priorizando **GitHub CLI**:
 
 1. Si `gh` está disponible, usa:
    ```
-   gh pr create --base <rama-destino> --title "<título>" --body-file "<ruta-del-md>" [--label "<label>" ...] [--reviewer "<reviewer>" ...]
+   gh pr create --base <rama-destino> --title "<título>" --body-file "<ruta-del-md>" \
+     --assignee "<selfAssignee|@me>" \
+     --label "<label-por-tipo>" [--label "<label-adicional>" ...] \
+     [--reviewer "<reviewer>" ...]
    ```
    El cuerpo de la PR debe ser el archivo markdown generado (`--body-file`), no texto reescrito. La `<rama-destino>` se determina según la sección "Rama destino (base) de la PR".
+   - `--assignee`: si `assignSelf` es `true`, incluye SIEMPRE `selfAssignee` (o `@me`). Ver "Asignación (assignee)".
+   - `--label`: incluye SIEMPRE la label de `labelsByType[<tipo-de-rama>]`, más las adicionales por contexto. Ver "Labels".
+   - Si la PR ya existe, aplica lo mismo con `gh pr edit <n> --add-assignee ... --add-label ...`.
 2. Si `gh` no está disponible pero hay un conector MCP de GitHub configurado, úsalo para crear la PR con el mismo título, cuerpo, labels y reviewers.
 3. Si no hay ninguna de las dos, deja el archivo escrito (como en modo `manual`) e informa al usuario que no fue posible subir automáticamente.
 

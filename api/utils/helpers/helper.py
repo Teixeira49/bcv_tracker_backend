@@ -31,16 +31,19 @@ class Helper:
         """
         return float(value.strip().replace(",", "."))
 
-    def validateDate(self, date_str: str) -> bool:
-        """Indica si ``date_str`` (ISO) corresponde a la fecha de hoy en Caracas.
+    def rate_of_change(self, previous, current) -> float:
+        """Calcula la variación porcentual (ROC) entre dos valores.
 
-        :param date_str: fecha en formato ISO 8601.
-        :return: ``True`` si es la fecha actual; ``False`` si difiere o el
-            formato es inválido.
+        Helper único de ROC del proyecto: lo usan tanto la persistencia
+        (``save_currencies_to_db``) como el cálculo en vivo
+        (``calculate_live_changes``), para no duplicar la fórmula ni el
+        guard de división por cero.
+
+        :param previous: valor previo (base de la comparación).
+        :param current: valor actual.
+        :return: ``((current - previous) / previous) * 100``; ``0.0`` si
+            ``previous`` es ``None``/``0`` (sin base contra la cual comparar).
         """
-        try:
-            date_from_bcv = datetime.fromisoformat(date_str).date()
-            return date_from_bcv == Helper().getZoneTime().date()
-        except ValueError:
-            print("Invalid date format")
-            return False
+        if previous and previous != 0:
+            return ((current - previous) / previous) * 100
+        return 0.0

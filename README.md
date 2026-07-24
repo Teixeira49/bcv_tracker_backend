@@ -122,10 +122,24 @@ Las principales librerías utilizadas en este proyecto son:
    ```
    > Las URLs mostradas son **placeholders**. Coloca las URLs reales de los proveedores solo en tu `.env` local y en las variables del entorno de despliegue (Vercel), nunca en archivos versionados. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 
-5. **Ejecutar migraciones**:
+5. **Inicializar / migrar el esquema**:
+
+   El esquema se gestiona con **Alembic**. La configuración vive en `alembic.ini` y las migraciones en `migrations/` (`migrations/versions/` contiene la línea base `0001_initial_schema`, con las tablas `currencies` y `platform_dates`). Alembic toma la URL de la BD de la variable de entorno `DATABASE_URL` (la misma que usa la app; no se hardcodea en `alembic.ini`).
+
+   Para crear/actualizar el esquema en tu base de datos:
    ```bash
    alembic upgrade head
    ```
+
+   Al modificar los modelos (`api/models/`), genera una nueva migración:
+   ```bash
+   alembic revision --autogenerate -m "descripción del cambio"
+   alembic upgrade head
+   ```
+
+   > Además, al **arrancar** la app (`lifespan` de `api/main.py`) se ejecuta `init_db()` una sola vez: un `create_all` idempotente que garantiza que las tablas existan en entornos efímeros (serverless / cold start). No sustituye a las migraciones —Alembic es la fuente de verdad del esquema versionado—, solo evita que un cold start sin `alembic upgrade head` previo deje la app sin tablas.
+   >
+   > 📋 Las convenciones completas para **crear y ejecutar migraciones** (nomenclatura, qué está y qué no permitido, orden de ejecución, verificación) están en la regla [`.agents/rules/alembic-migrations.md`](.agents/rules/alembic-migrations.md).
 
 6. **Iniciar el servidor**:
    ```bash

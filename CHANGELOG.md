@@ -5,6 +5,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y el proyecto sigue [Semantic Versioning](https://semver.org/lang/es/).
 
+## [2.1.1] - 2026-07-24
+
+_The Maintainability & Foundations Update. Detalle completo en [`docs/release/RELEASE_v2.1.1.md`](docs/release/RELEASE_v2.1.1.md)._
+
+### Added
+- Suite de tests del proyecto: parseo del HTML del BCV con fixtures, mapeo de JSON de Yadio/Binance y endpoints vía `httpx.MockTransport` (con casos de error); CI que corre `pytest` en cada PR (#20).
+- Configuración de **Alembic** con la migración inicial del esquema y `init_db` ejecutado una sola vez en el arranque (#19).
+- Guardrails de tooling: reglas que exigen tests por endpoint/fuente nueva, coherencia salida ↔ `response_model` y flujo de migraciones; auto-asignación de autor y labels por tipo en cada PR.
+
+### Changed
+- `getSavedCurrencies` ejecuta la lectura de BD en un hilo (`run_in_executor`), sin bloquear el event loop (#15).
+- Fetch por fuente, bloque de las 4 tareas de Binance y cálculo de ROC centralizados para eliminar duplicación (DRY) (#21).
+
+### Fixed
+- Los endpoints devuelven el envelope tipado para que FastAPI aplique realmente el `response_model` declarado (fin del drift doc vs realidad) (#18).
+
+### Removed
+- Código muerto: `FilterParams`, la clase `BcvCurrency`, `Helper.validateDate`, `reset_db` y la línea comentada de `save_currencies_to_db`, sin imports huérfanos (#22).
+- La base de datos SQLite `api/data/bcv.db` deja de versionarse y se ignora en `.gitignore` (#17).
+
 ## [2.1.0] - 2026-07-22
 
 _The Multi-Source Update. Detalle completo en [`docs/release/RELEASE_v2.1.0.md`](docs/release/RELEASE_v2.1.0.md)._
@@ -107,6 +127,7 @@ _The Professionalization Update. Detalle completo en [`docs/release/RELEASE_v1.1
 - Manejo de errores en la importación del router.
 - Simplificación de la lógica de comparación de fechas.
 
+[2.1.1]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.1...v2.0.0
 [1.1.1]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.0...v1.1.1

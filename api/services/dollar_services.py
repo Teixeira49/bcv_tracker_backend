@@ -47,32 +47,13 @@ class DollarService:
         :return: dict ``{"date": str | None, "currencies": list[dict]}`` con las
             monedas serializadas (incluyen su logo de plataforma).
         """
-        with source_guard(c.BCV_NAME):
-            url = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
-            elements = []
-            soup = BeautifulSoup(url, c.F_HTML)
-            date_elements = soup.findAll(class_=tag.CLASS_DATE)
-            # Extraemos el string de la fecha de forma segura
-            date_str = date_elements[0].attrs.get(tag.KEY_DATE) if date_elements else None
-
-            currencies = soup.findAll(class_=tag.CLASS_CURRENCY)
-            for item in currencies:
-                getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
-                elements.append(
-                    self.createCurrency(
-                        getCode.text,
-                        getName,
-                        self.helper.formatCuValue(getCurrency.text)
-                    )
-                )
-
-            # Guardamos en base de datos
-            #save_currencies_to_db(elements)
-
-            # Convertimos los objetos Currency a diccionarios serializables para JSON
-            serialized_currencies = [self.serialize_with_image(e) for e in elements]
-
-            return {"date": date_str, "currencies": serialized_currencies}
+        # Reutiliza el fetch+parseo único (``get_raw_bcv_currencies``) y solo
+        # añade la serialización, para no duplicar el scraping del portal.
+        raw = await self.get_raw_bcv_currencies()
+        return {
+            "date": raw["date"],
+            "currencies": [self.serialize_with_image(e) for e in raw["currencies"]],
+        }
 
     async def getCurrenciesByYadio(self):
         """Obtiene las tasas del mercado paralelo desde la API de Yadio.io.
@@ -83,28 +64,10 @@ class DollarService:
 
         :return: lista de dicts serializados (USD, EUR, BTC) con su logo.
         """
-        with source_guard(c.YADIO_NAME):
-            response = await self.client.get(endpoints.getParMktExRate("VES"))
-            currencies = [ self.createCurrency(
-                    "USD",
-                    "Dolar",
-                    response["VES"]["VES"] / response["VES"]["USD"],
-                    c.YADIO_NAME
-                ),
-                self.createCurrency(
-                    "EUR",
-                    "Euro",
-                    response["VES"]["VES"] / response["VES"]["EUR"],
-                    c.YADIO_NAME
-                ),
-                self.createCurrency(
-                    "BTC",
-                    "Bitcoin",
-                    response["BTC"],
-                    c.YADIO_NAME
-                )
-            ]
-            return [self.serialize_with_image(cur) for cur in currencies]
+        # Reutiliza el fetch+mapeo único (``get_raw_yadio_currencies``) y solo
+        # añade la serialización, para no duplicar la lógica de mapeo del JSON.
+        currencies = await self.get_raw_yadio_currencies()
+        return [self.serialize_with_image(cur) for cur in currencies]
 
     async def getDollarByYadio(self):
         """Obtiene solo la tasa del dólar paralelo (USD/VES) desde Yadio.io.
@@ -557,11 +520,30 @@ class DollarService:
     async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
         """Recupera de la base de datos las últimas tasas guardadas.
 
+        La lectura de la BD es síncrona/bloqueante (SQLAlchemy ORM), por lo que
+        se delega a un hilo con ``run_in_executor`` para no bloquear el event
+        loop, en consonancia con el resto de accesos a BD del service
+        (``save_currencies_to_db_async``, ``calculate_live_changes``).
+
         :param platforms: lista opcional de plataformas por las que filtrar
             (p. ej. ``[Constants.BCV_NAME]``). Si es ``None`` o vacía, devuelve
             las monedas de todas las plataformas.
         :return: lista de dicts serializados (con ``id`` y logo de plataforma);
             lista vacía si ocurre un error de lectura.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._fetch_saved_currencies, platforms)
+
+    def _fetch_saved_currencies(self, platforms: Optional[List[str]] = None) -> List[dict]:
+        """Lee de forma bloqueante las últimas tasas guardadas (para ``run_in_executor``).
+
+        Toda la interacción con la sesión de SQLAlchemy —consulta, filtrado y
+        serialización de las filas— ocurre dentro de este método para que se
+        ejecute íntegramente en el hilo del executor y antes de cerrar la
+        sesión (evita lazy-loads sobre objetos ya desligados).
+
+        :param platforms: mismas semánticas que ``getSavedCurrencies``.
+        :return: lista de dicts serializados; lista vacía ante un error de lectura.
         """
         session = SessionLocal()
         try:
@@ -707,10 +689,8 @@ class DollarService:
             try:
                 for cur in currencies:
                     existing = session.query(Currency).filter(Currency.code == cur.code, Currency.platform == cur.platform).first()
-                    if existing and existing.value and existing.value != 0:
-                        cur.change = ((cur.value - existing.value) / existing.value) * 100
-                    else:
-                        cur.change = 0.0
+                    previous = existing.value if existing else None
+                    cur.change = self.helper.rate_of_change(previous, cur.value)
                 return currencies
             finally:
                 session.close()

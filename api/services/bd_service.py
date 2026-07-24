@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from typing import List
 
@@ -17,20 +17,14 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
-    """Crear tablas si no existen."""
-    Base.metadata.create_all(bind=engine)
+    """Crea las tablas si no existen.
 
-def reset_db():
-    """Comprueba si la tabla existe y la elimina para reiniciarla."""
-    inspector = inspect(engine)
-    # Verificamos si la tabla 'currencies' existe
-    if inspector.has_table(Currency.__tablename__):
-        print(f"Reiniciando tabla: {Currency.__tablename__}")
-        # Eliminamos solo la tabla específica
-        Currency.__table__.drop(engine)
-    
-    # Volvemos a crear las tablas
-    init_db()
+    Se invoca UNA sola vez en el arranque de la app (evento ``lifespan`` de
+    ``api/main.py``), no por request. El esquema versionado lo gobierna Alembic
+    (``alembic upgrade head``); este ``create_all`` es una garantía idempotente
+    de que las tablas existan en entornos efímeros (serverless / cold start).
+    """
+    Base.metadata.create_all(bind=engine)
 
 def save_currencies_to_db(currencies: List[Currency]):
     """Persiste (upsert) una lista de monedas y calcula su variación (ROC).
@@ -42,7 +36,6 @@ def save_currencies_to_db(currencies: List[Currency]):
 
     :param currencies: monedas a guardar o actualizar.
     """
-    init_db()
     session = SessionLocal()
     try:
         now = Helper().getZoneTime()
@@ -56,12 +49,8 @@ def save_currencies_to_db(currencies: List[Currency]):
             # actualizar o crear el registro "todayData == True"
             if existing_row:
                 # Si existe un registro con el mismo código y todayData, actualízalo
-                # Calculamos el indicador de variacion % (ROC)
-                previous_value = existing_row.value
-                if previous_value and previous_value != 0:
-                    cur.change = ((cur.value - previous_value) / previous_value) * 100 # Cambiar a un helper
-                else:
-                    cur.change = 0.0
+                # Calculamos el indicador de variacion % (ROC) con el helper único.
+                cur.change = Helper().rate_of_change(existing_row.value, cur.value)
 
                 existing_row.name = cur.name
                 existing_row.value = cur.value
@@ -95,7 +84,6 @@ def save_platform_date(platform: str, date_value: str):
     :param platform: nombre de la plataforma (p. ej. ``"Banco Central de Venezuela"``).
     :param date_value: fecha reportada por la fuente, como texto.
     """
-    init_db()
     session = SessionLocal()
     try:
         now = Helper().getZoneTime()
