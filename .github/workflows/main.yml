@@ -1,48 +1,81 @@
 name: Scheduled Scrape
 
+# Cron que refresca en BD TODAS las fuentes varias veces al día (issue #72).
+#
+# Decisión GitHub Actions vs Vercel Cron (documentada, ver también
+# docs/architecture/scheduled-scrape.md): se mantiene **GitHub Actions**. Ya
+# existía y funciona, es gratis para este uso, falla de forma visible (job en
+# rojo ante no-2xx) y mantiene el secreto de base fuera del código. Vercel Cron
+# quedaría atado al proyecto de Vercel y a su plan; GitHub Actions es neutral al
+# hosting y más fácil de auditar desde el repo.
+#
+# Cadence: el resto de fuentes (P2P/agregadores) se refrescan en cada corrida
+# (6×/día); el BCV se alinea a su publicación oficial y solo se incluye en la
+# corrida de las 23:00 UTC (~tarde/noche en Venezuela).
+
 on:
   schedule:
-    # Ejecuta los 7 días de la semana en horarios UTC:
-    - cron: '0 3 * * *'    # 3:00 AM
-    - cron: '0 7 * * *'    # 7:00 AM
-    - cron: '0 11 * * *'   # 11:00 AM (Mediodía)
-    - cron: '45 14 * * *'  # 2:45 PM
-    - cron: '15 18 * * *'  # 6:15 PM
-    - cron: '0 23 * * *'   # 11:00 PM (Noche - Especial)
-    
+    - cron: '0 3 * * *'    # 3:00 AM UTC
+    - cron: '0 7 * * *'    # 7:00 AM UTC
+    - cron: '0 11 * * *'   # 11:00 AM UTC
+    - cron: '45 14 * * *'  # 2:45 PM UTC
+    - cron: '15 18 * * *'  # 6:15 PM UTC
+    - cron: '0 23 * * *'   # 11:00 PM UTC (incluye BCV)
+  workflow_dispatch: {}    # permite ejecutar el scrape manualmente desde la UI
+
 env:
-  BASE_URL: ${{ secrets.BACKEND_BASE_URL }} # Obtiene el valor del Secret de GitHub
-  
+  BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
+  # API key de escritura de update-currencies (issue #13). Vacía hasta que #13
+  # exista; si está definida, se envía como Bearer. Así el cron queda listo para
+  # autenticarse sin cambios cuando se proteja el endpoint.
+  UPDATE_API_KEY: ${{ secrets.UPDATE_API_KEY }}
+
 jobs:
   trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger scrape endpoint
+      - name: Trigger update-currencies (Body por mercado, todas las fuentes)
         run: |
-          # Obtener la hora actual en formato 0-23 (UTC)
-          CURRENT_HOUR=$(date +%H)
-          
-          # Por defecto bcv es false
-          BCV_PARAM="false"
-          
-          # Si es la ejecución de las 11 PM (Hora 23), activamos bcv
-          if [ "$CURRENT_HOUR" -eq "23" ]; then
-            BCV_PARAM="true"
-            echo "🕒 Ejecución de las 11 PM detectada. Activando BCV."
+          set -euo pipefail
+
+          CURRENT_HOUR=$(date -u +%H)
+
+          # Body por mercado (#71): P2P cripto con ambos lados (ambas), fiat y
+          # agregadores con todas sus divisas (todas), y Exchange Monitor con su
+          # valor propio + promedio (own+monitor).
+          MARKETS='"yadio":"todas","binance":"ambas","bybit":"ambas","okx":"ambas","bitget":"ambas","airtm":"todas","dolarapi":"todas","exchange_monitor":"own+monitor"'
+
+          # BCV alineado a su publicación oficial: solo en la corrida de las 23:00 UTC.
+          if [ "$CURRENT_HOUR" = "23" ]; then
+            MARKETS='"bcv":"todas",'"$MARKETS"
+            echo "🕒 Corrida alineada a la publicación del BCV: incluyendo BCV."
           fi
 
-          URL_ENDPOINT="$BASE_URL/api/v1/venezuela/update-currencies?bcv=$BCV_PARAM&yadio=true&binance=true"
+          BODY="{\"markets\":{${MARKETS}}}"
 
-          echo "Ejecutando solicitud PUT a: $URL_ENDPOINT"
-          
-          HTTP_CODE=$(curl -X PUT -s -S -o /dev/null -w "%{http_code}" "$URL_ENDPOINT")
+          # Cabecera de autenticación opcional (se activa cuando exista #13).
+          AUTH_HEADER=()
+          if [ -n "${UPDATE_API_KEY}" ]; then
+            AUTH_HEADER=(-H "Authorization: Bearer ${UPDATE_API_KEY}")
+          fi
 
-          echo "Código de estado HTTP recibido: $HTTP_CODE"
+          URL="$BASE_URL/api/v1/venezuela/update-currencies"
+          echo "PUT $URL"
+          echo "Body: $BODY"
+
+          HTTP_CODE=$(curl -X PUT -s -S -o /tmp/response.json -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            "${AUTH_HEADER[@]}" \
+            --data "$BODY" \
+            "$URL")
+
+          echo "Código de estado HTTP: $HTTP_CODE"
+          echo "Respuesta:"; cat /tmp/response.json 2>/dev/null || true; echo
 
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "✅ Solicitud PUT completada exitosamente (Código $HTTP_CODE)."
+            echo "✅ update-currencies completado (Código $HTTP_CODE)."
           else
-            # Falla el job si el código de estado no es 2xx
-            echo "❌ ERROR: La solicitud PUT falló. Código de estado: $HTTP_CODE"
+            # Falla el job de forma visible si el estado no es 2xx.
+            echo "❌ ERROR: update-currencies falló. Código: $HTTP_CODE"
             exit 1
           fi
