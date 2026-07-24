@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Any, Generic, TypeVar
 
 T = TypeVar("T")
@@ -31,11 +31,10 @@ class AllCurrenciesResponseData(BaseModel):
     exchange_monitor: List[CurrencySchema]
 
 class UpdateCurrenciesResponseData(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     message: str
     updated_currencies: Optional[int] = Field(None, alias="updated_count")
-
-    class Config:
-        populate_by_name = True
 
 class ErrorResponse(BaseModel):
     status: str = Field(..., description="Estado del error (ej. Error)")
