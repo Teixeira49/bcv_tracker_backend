@@ -5,6 +5,11 @@ class Config:
 
     DATABASE_URL = os.getenv("DATABASE_URL")
 
+    # Nivel de logging (opcional). Si no se define, se usa
+    # Constants.LOG_LEVEL_DEFAULT (INFO). No entra en _REQUIRED_ENV: la app
+    # arranca sin él.
+    LOG_LEVEL = os.getenv("LOG_LEVEL")
+
     OFFICIAL_URL = os.getenv("OFFICIAL_MARKET_DATA_PROVIDER_URL")
 
     PARALLEL_MARKET_A_URL = os.getenv("MARKET_DATA_PROVIDER_A_URL")

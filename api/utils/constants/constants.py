@@ -53,6 +53,20 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
 
     HTTP_TIMEOUT = 10.0
 
+    # --- Logging ---
+    # Namespace raíz de los loggers del proyecto. Todo logger se cuelga de aquí
+    # (`dolartracker.<modulo>`) para configurarse en un solo punto sin pisar la
+    # configuración de uvicorn.
+    LOGGER_NAMESPACE = "dolartracker"
+
+    # Nivel por defecto si no se define la variable de entorno LOG_LEVEL.
+    LOG_LEVEL_DEFAULT = "INFO"
+
+    # Formato estructurado y consistente de cada línea de log.
+    LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+
+    LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
     STATUS_OK = 200
 
     STATUS_OK_MSG = 'Success'
