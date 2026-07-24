@@ -47,32 +47,13 @@ class DollarService:
         :return: dict ``{"date": str | None, "currencies": list[dict]}`` con las
             monedas serializadas (incluyen su logo de plataforma).
         """
-        with source_guard(c.BCV_NAME):
-            url = await self.client.get_content(endpoints.OFF_MKT, verify=c.VERIFY)
-            elements = []
-            soup = BeautifulSoup(url, c.F_HTML)
-            date_elements = soup.findAll(class_=tag.CLASS_DATE)
-            # Extraemos el string de la fecha de forma segura
-            date_str = date_elements[0].attrs.get(tag.KEY_DATE) if date_elements else None
-
-            currencies = soup.findAll(class_=tag.CLASS_CURRENCY)
-            for item in currencies:
-                getCode, getCurrency, getName = item.find(tag.CLASS_CODE), item.find(tag.CLASS_NAME), item.attrs.get(tag.KEY_NAME)
-                elements.append(
-                    self.createCurrency(
-                        getCode.text,
-                        getName,
-                        self.helper.formatCuValue(getCurrency.text)
-                    )
-                )
-
-            # Guardamos en base de datos
-            #save_currencies_to_db(elements)
-
-            # Convertimos los objetos Currency a diccionarios serializables para JSON
-            serialized_currencies = [self.serialize_with_image(e) for e in elements]
-
-            return {"date": date_str, "currencies": serialized_currencies}
+        # Reutiliza el fetch+parseo único (``get_raw_bcv_currencies``) y solo
+        # añade la serialización, para no duplicar el scraping del portal.
+        raw = await self.get_raw_bcv_currencies()
+        return {
+            "date": raw["date"],
+            "currencies": [self.serialize_with_image(e) for e in raw["currencies"]],
+        }
 
     async def getCurrenciesByYadio(self):
         """Obtiene las tasas del mercado paralelo desde la API de Yadio.io.
@@ -83,28 +64,10 @@ class DollarService:
 
         :return: lista de dicts serializados (USD, EUR, BTC) con su logo.
         """
-        with source_guard(c.YADIO_NAME):
-            response = await self.client.get(endpoints.getParMktExRate("VES"))
-            currencies = [ self.createCurrency(
-                    "USD",
-                    "Dolar",
-                    response["VES"]["VES"] / response["VES"]["USD"],
-                    c.YADIO_NAME
-                ),
-                self.createCurrency(
-                    "EUR",
-                    "Euro",
-                    response["VES"]["VES"] / response["VES"]["EUR"],
-                    c.YADIO_NAME
-                ),
-                self.createCurrency(
-                    "BTC",
-                    "Bitcoin",
-                    response["BTC"],
-                    c.YADIO_NAME
-                )
-            ]
-            return [self.serialize_with_image(cur) for cur in currencies]
+        # Reutiliza el fetch+mapeo único (``get_raw_yadio_currencies``) y solo
+        # añade la serialización, para no duplicar la lógica de mapeo del JSON.
+        currencies = await self.get_raw_yadio_currencies()
+        return [self.serialize_with_image(cur) for cur in currencies]
 
     async def getDollarByYadio(self):
         """Obtiene solo la tasa del dólar paralelo (USD/VES) desde Yadio.io.
