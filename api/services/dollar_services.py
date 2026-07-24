@@ -557,11 +557,30 @@ class DollarService:
     async def getSavedCurrencies(self, platforms: Optional[List[str]] = None):
         """Recupera de la base de datos las últimas tasas guardadas.
 
+        La lectura de la BD es síncrona/bloqueante (SQLAlchemy ORM), por lo que
+        se delega a un hilo con ``run_in_executor`` para no bloquear el event
+        loop, en consonancia con el resto de accesos a BD del service
+        (``save_currencies_to_db_async``, ``calculate_live_changes``).
+
         :param platforms: lista opcional de plataformas por las que filtrar
             (p. ej. ``[Constants.BCV_NAME]``). Si es ``None`` o vacía, devuelve
             las monedas de todas las plataformas.
         :return: lista de dicts serializados (con ``id`` y logo de plataforma);
             lista vacía si ocurre un error de lectura.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._fetch_saved_currencies, platforms)
+
+    def _fetch_saved_currencies(self, platforms: Optional[List[str]] = None) -> List[dict]:
+        """Lee de forma bloqueante las últimas tasas guardadas (para ``run_in_executor``).
+
+        Toda la interacción con la sesión de SQLAlchemy —consulta, filtrado y
+        serialización de las filas— ocurre dentro de este método para que se
+        ejecute íntegramente en el hilo del executor y antes de cerrar la
+        sesión (evita lazy-loads sobre objetos ya desligados).
+
+        :param platforms: mismas semánticas que ``getSavedCurrencies``.
+        :return: lista de dicts serializados; lista vacía ante un error de lectura.
         """
         session = SessionLocal()
         try:
