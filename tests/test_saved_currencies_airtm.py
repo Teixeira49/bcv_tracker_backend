@@ -1,11 +1,10 @@
-"""Airtm seleccionable en GET /saved-currencies.
+"""Airtm seleccionable en POST /saved-currencies (Body por mercado, #71).
 
-`airtm=true` debe incluir Airtm entre las plataformas consultadas en BD y
-devolver sus filas guardadas, igual que el resto de fuentes.
+Con ``{"markets": {"airtm": "bd-todas"}}`` se lee Airtm de la BD y se devuelven
+sus filas guardadas, igual que el resto de fuentes.
 """
-from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
-import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -22,16 +21,17 @@ def _airtm(name):
     return {"platform": c.AIRTM_NAME, "code": "USD", "name": name, "value": 1.0, "change": 0.0}
 
 
-def test_airtm_true_consulta_y_devuelve_airtm(monkeypatch):
-    saved = AsyncMock(return_value=[_airtm("Dolar-Buy"), _airtm("Dolar-Sell")])
-    monkeypatch.setattr(venezuela_controller.dollar_service, "getSavedCurrencies", saved)
+def test_airtm_bd_todas_consulta_y_devuelve_airtm(monkeypatch):
+    fetch = MagicMock(return_value=[_airtm("Dolar-Buy"), _airtm("Dolar-Sell")])
+    monkeypatch.setattr(venezuela_controller.dollar_service, "_fetch_saved_for_platform", fetch)
 
-    r = client.get(SAVED, params={"airtm": True})
+    r = client.post(SAVED, json={"markets": {"airtm": "bd-todas"}})
 
     assert r.status_code == 200
-    # Airtm se pidió a la BD como plataforma
-    _, kwargs = saved.call_args
-    assert c.AIRTM_NAME in kwargs["platforms"]
+    # Airtm se leyó de la BD como plataforma, sin filtro de solo-dólar.
+    args, kwargs = fetch.call_args
+    assert args[0] == c.AIRTM_NAME
+    assert (args[1:] or (kwargs.get("dollar_only"),))[0] is False
     # y sus filas vuelven en la respuesta
     names = sorted(item["name"] for item in r.json()["data"] if item["platform"] == c.AIRTM_NAME)
     assert names == ["Dolar-Buy", "Dolar-Sell"]

@@ -20,10 +20,7 @@ from api.utils.constants.constants import Constants as c
 client = TestClient(main.app)
 svc = ctrl.dollar_service
 UPDATE = f"{c.API_V1_STR}/venezuela/update-currencies"
-ONLY_BCV = {
-    "bcv": True, "yadio": False, "binance": False, "bybit": False, "okx": False,
-    "bitget": False, "airtm": False, "dolarapi": False, "exchange_monitor": False,
-}
+ONLY_BCV = {"markets": {"bcv": "todas"}}
 
 
 def test_success_path_uses_updated_count(monkeypatch):
@@ -33,18 +30,18 @@ def test_success_path_uses_updated_count(monkeypatch):
     monkeypatch.setattr(svc, "save_currencies_to_db_async",
                         AsyncMock(return_value={"message": "ok", "updated_count": 1}))
 
-    data = client.put(UPDATE, params=ONLY_BCV).json()["data"]
+    data = client.put(UPDATE, json=ONLY_BCV).json()["data"]
 
     assert set(data.keys()) == {"message", "updated_count"}
     assert data["updated_count"] == 1
 
 
 def test_empty_path_uses_same_shape(monkeypatch):
-    """El early-return sin datos usa la MISMA estructura y nombre de campo."""
+    """El camino sin datos usa la MISMA estructura y nombre de campo."""
     monkeypatch.setattr(svc, "get_raw_bcv_currencies",
                         AsyncMock(return_value={"date": None, "currencies": []}))
 
-    data = client.put(UPDATE, params=ONLY_BCV).json()["data"]
+    data = client.put(UPDATE, json=ONLY_BCV).json()["data"]
 
     assert set(data.keys()) == {"message", "updated_count"}
     assert data["updated_count"] == 0
@@ -56,10 +53,10 @@ def test_both_paths_have_identical_field_set(monkeypatch):
                         AsyncMock(return_value={"date": None, "currencies": [svc.createCurrency("USD", "Dolar", 1.0, c.BCV_NAME)]}))
     monkeypatch.setattr(svc, "save_currencies_to_db_async",
                         AsyncMock(return_value={"message": "ok", "updated_count": 1}))
-    success = client.put(UPDATE, params=ONLY_BCV).json()["data"]
+    success = client.put(UPDATE, json=ONLY_BCV).json()["data"]
 
     monkeypatch.setattr(svc, "get_raw_bcv_currencies",
                         AsyncMock(return_value={"date": None, "currencies": []}))
-    empty = client.put(UPDATE, params=ONLY_BCV).json()["data"]
+    empty = client.put(UPDATE, json=ONLY_BCV).json()["data"]
 
     assert set(success.keys()) == set(empty.keys())

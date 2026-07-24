@@ -32,13 +32,13 @@ def _assert_error_envelope(body):
     assert "detail" not in body
 
 
-def test_400_usa_envelope_uniforme():
-    """La validación de 'ninguna fuente seleccionada' (400) usa el envelope uniforme."""
+def test_422_modo_bd_en_update_usa_envelope_uniforme():
+    """Un modo 'bd-*' en update-currencies (inválido) usa el envelope uniforme (422)."""
     response = client.put(
         f"{c.API_V1_STR}/venezuela/update-currencies",
-        params={"bcv": False, "yadio": False, "binance": False, "bybit": False, "okx": False, "bitget": False, "airtm": False, "dolarapi": False, "exchange_monitor": False},
+        json={"markets": {"bcv": "bd-solo-dolar"}},
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     _assert_error_envelope(response.json())
 
 
