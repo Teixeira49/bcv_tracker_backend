@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-import httpx
 import asyncio
 from typing import List
 from api.models.schemas import BaseResponse, CurrencySchema, BcvResponseData, AllCurrenciesResponseData, UpdateCurrenciesResponseData, ErrorResponse
@@ -52,36 +51,28 @@ async def get_all_currencies(averaged: bool = Query(False)):
     # Exchange Monitor abre su propio cliente HTTP (flujo CSRF + JSON); en vivo
     # devuelve todos los mercados que reporta (valor propio + promedio + resto).
     exchange_monitor_task = dollar_service.getCurrenciesByExchangeMonitor()
+    # El bloque de las 4 tareas de Binance vive en un único método del service
+    # (``get_raw_binance_currencies``), que abre su propio cliente HTTP.
+    binance_task = dollar_service.get_raw_binance_currencies()
 
-    async with httpx.AsyncClient() as client:
-        # Preparamos las 4 tareas de Binance (necesarias para ambos casos)
-        task_usdt_buy = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Buy")
-        task_usdc_buy = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Buy")
-        task_usdt_sell = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Sell")
-        task_usdc_sell = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Sell")
+    # Ejecutamos TODO en paralelo (5 fuentes concurrentes)
+    bcv_res, yadio_res, bybit_raw, em_res, binance_raw = await asyncio.gather(
+        bcv_task, yadio_task, bybit_task, exchange_monitor_task, binance_task
+    )
 
-        # Ejecutamos TODO en paralelo (8 tareas concurrentes)
-        bcv_res, yadio_res, bybit_raw, em_res, usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
-            bcv_task, yadio_task, bybit_task, exchange_monitor_task, task_usdt_buy, task_usdc_buy, task_usdt_sell, task_usdc_sell
-        )
-
-    # Procesamos la lógica de Binance según el parámetro
+    # Procesamos la lógica de Binance/Bybit según el parámetro. El promedio por
+    # activo (compra+venta)/2 se centraliza en ``average_by_asset``.
     if averaged:
         binance_data = [
-            dollar_service.serialize_with_image(dollar_service.createCurrency("USDT", "Tether", (usdt_buy.value + usdt_sell.value) / 2, c.BINANCE_NAME)),
-            dollar_service.serialize_with_image(dollar_service.createCurrency("USDC", "USD Coin", (usdc_buy.value + usdc_sell.value) / 2, c.BINANCE_NAME))
+            dollar_service.serialize_with_image(cur)
+            for cur in dollar_service.average_by_asset(binance_raw, c.BINANCE_NAME)
         ]
         bybit_data = [
             dollar_service.serialize_with_image(cur)
             for cur in dollar_service.average_by_asset(bybit_raw, c.BYBIT_NAME)
         ]
     else:
-        binance_data = [
-            dollar_service.serialize_with_image(usdt_buy),
-            dollar_service.serialize_with_image(usdc_buy),
-            dollar_service.serialize_with_image(usdt_sell),
-            dollar_service.serialize_with_image(usdc_sell)
-        ]
+        binance_data = [dollar_service.serialize_with_image(cur) for cur in binance_raw]
         bybit_data = [dollar_service.serialize_with_image(cur) for cur in bybit_raw]
 
     return api_response({
@@ -205,25 +196,8 @@ async def get_yadio_dollar():
 )
 async def get_binance_currencies():
     """Devuelve las 4 tasas de Binance P2P (compra/venta de USDT y USDC)."""
-    async with httpx.AsyncClient() as client:
-        task_usdt_buy = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Buy")
-        task_usdc_buy = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Buy")
-        task_usdt_sell = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Sell")
-        task_usdc_sell = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Sell")
-
-        usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
-            task_usdt_buy,
-            task_usdc_buy,
-            task_usdt_sell,
-            task_usdc_sell
-        )
-
-    return api_response([
-        dollar_service.serialize_with_image(usdt_buy),
-        dollar_service.serialize_with_image(usdc_buy),
-        dollar_service.serialize_with_image(usdt_sell),
-        dollar_service.serialize_with_image(usdc_sell)
-    ])
+    currencies = await dollar_service.get_raw_binance_currencies()
+    return api_response([dollar_service.serialize_with_image(cur) for cur in currencies])
 
 @router.get(
     "/binance/averaged",
@@ -241,32 +215,9 @@ async def get_binance_currencies():
 )
 async def get_binance_averaged():
     """Devuelve el promedio compra/venta de USDT y USDC en Binance P2P."""
-    async with httpx.AsyncClient() as client:
-        # Ejecutamos las 4 solicitudes en paralelo
-        task_usdt_buy = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Buy")
-        task_usdc_buy = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Buy")
-        task_usdt_sell = dollar_service.getCurrenciesByBinance(client, "USDT", "VES", "Sell")
-        task_usdc_sell = dollar_service.getCurrenciesByBinance(client, "USDC", "VES", "Sell")
-
-        usdt_buy, usdc_buy, usdt_sell, usdc_sell = await asyncio.gather(
-            task_usdt_buy,
-            task_usdc_buy,
-            task_usdt_sell,
-            task_usdc_sell
-        )
-
-    # Calculamos los promedios de compra y venta
-    avg_tether = (usdt_buy.value + usdt_sell.value) / 2
-    avg_usdc = (usdc_buy.value + usdc_sell.value) / 2
-
-    # Creamos las nuevas entidades promediadas con nombres limpios
-    tether_averaged = dollar_service.createCurrency("USDT", "Tether", avg_tether, c.BINANCE_NAME)
-    usdc_averaged = dollar_service.createCurrency("USDC", "USD Coin", avg_usdc, c.BINANCE_NAME)
-
-    return api_response([
-        dollar_service.serialize_with_image(tether_averaged),
-        dollar_service.serialize_with_image(usdc_averaged)
-    ])
+    currencies = await dollar_service.get_raw_binance_currencies()
+    averaged = dollar_service.average_by_asset(currencies, c.BINANCE_NAME)
+    return api_response([dollar_service.serialize_with_image(cur) for cur in averaged])
 
 @router.get(
     "/bybit",
