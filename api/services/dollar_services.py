@@ -683,17 +683,38 @@ class DollarService:
         await loop.run_in_executor(None, save_platform_date, platform, date_value)
 
     async def calculate_live_changes(self, currencies: List[Currency]) -> List[Currency]:
-        """Calcula el ROC para una lista de monedas en vivo comparando con la BD."""
+        """Calcula el ROC para una lista de monedas en vivo comparando con la BD.
+
+        Precarga los valores previos almacenados en **una sola** consulta
+        (``IN`` sobre ``code`` y ``platform``) antes del bucle, en lugar de una
+        consulta por moneda (patrón N+1). El número de queries es constante e
+        independiente de la cantidad de monedas. El ROC se calcula reutilizando
+        el helper único ``Helper.rate_of_change``.
+        """
         if not currencies:
             return []
-        
+
         loop = asyncio.get_running_loop()
         def _calc():
             session = SessionLocal()
             try:
+                # Códigos y plataformas del lote en vivo. Se filtran ambos en
+                # SQL (una sola consulta, portable entre SQLite y PostgreSQL);
+                # el par exacto (code, platform) se resuelve luego con el dict.
+                codes = {cur.code for cur in currencies}
+                platforms = {cur.platform for cur in currencies}
+                rows = (
+                    session.query(Currency.code, Currency.platform, Currency.value)
+                    .filter(Currency.code.in_(codes), Currency.platform.in_(platforms))
+                    .order_by(Currency.id.asc())
+                    .all()
+                )
+                # Mapa (code, platform) -> valor previo. Con orden ascendente por
+                # id, el más reciente prevalece si hubiera más de una fila.
+                previous_by_key = {(code, platform): value for code, platform, value in rows}
+
                 for cur in currencies:
-                    existing = session.query(Currency).filter(Currency.code == cur.code, Currency.platform == cur.platform).first()
-                    previous = existing.value if existing else None
+                    previous = previous_by_key.get((cur.code, cur.platform))
                     cur.change = self.helper.rate_of_change(previous, cur.value)
                 return currencies
             finally:
