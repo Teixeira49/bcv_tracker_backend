@@ -61,12 +61,8 @@ def save_currencies_to_db(currencies: List[Currency]):
             # actualizar o crear el registro "todayData == True"
             if existing_row:
                 # Si existe un registro con el mismo código y todayData, actualízalo
-                # Calculamos el indicador de variacion % (ROC)
-                previous_value = existing_row.value
-                if previous_value and previous_value != 0:
-                    cur.change = ((cur.value - previous_value) / previous_value) * 100 # Cambiar a un helper
-                else:
-                    cur.change = 0.0
+                # Calculamos el indicador de variacion % (ROC) con el helper único.
+                cur.change = Helper().rate_of_change(existing_row.value, cur.value)
 
                 existing_row.name = cur.name
                 existing_row.value = cur.value

@@ -726,10 +726,8 @@ class DollarService:
             try:
                 for cur in currencies:
                     existing = session.query(Currency).filter(Currency.code == cur.code, Currency.platform == cur.platform).first()
-                    if existing and existing.value and existing.value != 0:
-                        cur.change = ((cur.value - existing.value) / existing.value) * 100
-                    else:
-                        cur.change = 0.0
+                    previous = existing.value if existing else None
+                    cur.change = self.helper.rate_of_change(previous, cur.value)
                 return currencies
             finally:
                 session.close()
