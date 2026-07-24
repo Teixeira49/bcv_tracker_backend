@@ -1,0 +1,48 @@
+# Entorno reproducible de DolarTracker para desarrollo local.
+#
+# Levanta:
+#   - db:  PostgreSQL (base de datos que la app usa para persistir tasas).
+#   - app: la API FastAPI construida desde el Dockerfile.
+#
+# Uso:
+#   cp .env.example .env   # rellena las URLs de proveedores; las creds de la BD
+#                          # las provee este compose (variables POSTGRES_*).
+#   docker compose up --build
+#
+# La app queda en http://localhost:8000 (Swagger en /docs, ReDoc en /redoc).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dolartracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dolartracker}
+      POSTGRES_DB: ${POSTGRES_DB:-dolartracker}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dolartracker} -d ${POSTGRES_DB:-dolartracker}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    # Las URLs de los proveedores (MARKET_DATA_PROVIDER_*_URL, OFFICIAL_*) se
+    # toman del .env local. DATABASE_URL se sobreescribe abajo para apuntar al
+    # servicio `db` de este compose (los valores de `environment` tienen
+    # prioridad sobre los del env_file).
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dolartracker}:${POSTGRES_PASSWORD:-dolartracker}@db:5432/${POSTGRES_DB:-dolartracker}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

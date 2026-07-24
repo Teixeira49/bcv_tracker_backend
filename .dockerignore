@@ -1,0 +1,25 @@
+# Entornos y cachés locales
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Control de versiones y metadatos
+.git/
+.gitignore
+
+# Secretos y configuración local (NUNCA dentro de la imagen)
+.env
+.env.*
+!.env.example
+
+# Artefactos de despliegue/herramientas ajenos a la imagen
+.vercel/
+docs/pull-requests/
+*.md
+!README.md
+
+# Misceláneos
+image.png
+git_history.txt
