@@ -10,17 +10,17 @@ name: Scheduled Scrape
 # hosting y más fácil de auditar desde el repo.
 #
 # Cadence: el resto de fuentes (P2P/agregadores) se refrescan en cada corrida
-# (6×/día); el BCV se alinea a su publicación oficial y solo se incluye en la
-# corrida de las 23:00 UTC (~tarde/noche en Venezuela).
+# (6×/día); el BCV solo se incluye en la corrida de las 04:00 UTC, que equivale
+# a la medianoche (00:00) en Venezuela (UTC-4).
 
 on:
   schedule:
-    - cron: '0 3 * * *'    # 3:00 AM UTC
+    - cron: '0 4 * * *'    # 04:00 UTC = 00:00 Venezuela (UTC-4) → incluye BCV
     - cron: '0 7 * * *'    # 7:00 AM UTC
     - cron: '0 11 * * *'   # 11:00 AM UTC
     - cron: '45 14 * * *'  # 2:45 PM UTC
     - cron: '15 18 * * *'  # 6:15 PM UTC
-    - cron: '0 23 * * *'   # 11:00 PM UTC (incluye BCV)
+    - cron: '0 23 * * *'   # 11:00 PM UTC
   workflow_dispatch: {}    # permite ejecutar el scrape manualmente desde la UI
 
 env:
@@ -45,10 +45,10 @@ jobs:
           # valor propio + promedio (own+monitor).
           MARKETS='"yadio":"todas","binance":"ambas","bybit":"ambas","okx":"ambas","bitget":"ambas","airtm":"todas","dolarapi":"todas","exchange_monitor":"own+monitor"'
 
-          # BCV alineado a su publicación oficial: solo en la corrida de las 23:00 UTC.
-          if [ "$CURRENT_HOUR" = "23" ]; then
+          # BCV solo en la corrida de las 04:00 UTC = 00:00 (medianoche) en Venezuela.
+          if [ "$CURRENT_HOUR" = "04" ]; then
             MARKETS='"bcv":"todas",'"$MARKETS"
-            echo "🕒 Corrida alineada a la publicación del BCV: incluyendo BCV."
+            echo "🕛 Corrida de medianoche en Venezuela (04:00 UTC): incluyendo BCV."
           fi
 
           BODY="{\"markets\":{${MARKETS}}}"

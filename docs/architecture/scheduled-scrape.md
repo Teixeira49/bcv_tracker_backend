@@ -26,15 +26,15 @@ En cada corrida se envía el Body por mercado:
 - **P2P cripto** (Binance, Bybit, OKX, Bitget): `ambas` (persiste buy y sell).
 - **Fiat / agregadores** (Yadio, Airtm, DolarAPI): `todas`.
 - **Exchange Monitor**: `own+monitor` (valor propio + promedio).
-- **BCV**: `todas`, **solo** en la corrida alineada a su publicación.
+- **BCV**: `todas`, **solo** en la corrida de la medianoche de Venezuela.
 
 ## Cadencia
 
-Seis corridas diarias (UTC): `03:00, 07:00, 11:00, 14:45, 18:15, 23:00`. Las
-fuentes P2P/agregadores se refrescan en **todas**; el **BCV** se alinea a su
-publicación oficial y solo se incluye en la corrida de las **23:00 UTC**
-(~tarde/noche en Venezuela). La cadencia es configurable editando la lista
-`schedule` del workflow. Además, `workflow_dispatch` permite corridas manuales.
+Seis corridas diarias (UTC): `04:00, 07:00, 11:00, 14:45, 18:15, 23:00`. Las
+fuentes P2P/agregadores se refrescan en **todas**; el **BCV** solo se incluye en
+la corrida de las **04:00 UTC**, que equivale a la **medianoche (00:00) en
+Venezuela** (UTC-4). La cadencia es configurable editando la lista `schedule`
+del workflow. Además, `workflow_dispatch` permite corridas manuales.
 
 ## Autenticación (#13)
 
