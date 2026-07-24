@@ -217,7 +217,7 @@ class DollarService:
         propaga tal cual, para no enmascarar caídas reales de la fuente.
         """
         with source_guard(c.BYBIT_NAME):
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 tasks = [
                     self.getCurrenciesByBybit(client, "USDT", "VES", "Buy"),
                     self.getCurrenciesByBybit(client, "USDC", "VES", "Buy"),
@@ -285,7 +285,7 @@ class DollarService:
         ``SourceEmptyError`` (502). Cualquier otro fallo (red, parseo) se propaga.
         """
         with source_guard(c.OKX_NAME):
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 tasks = [
                     self.getCurrenciesByOkx(client, "USDT", "VES", "Buy"),
                     self.getCurrenciesByOkx(client, "USDC", "VES", "Buy"),
@@ -379,7 +379,7 @@ class DollarService:
         pairs = [("USDT", "Buy"), ("USDC", "Buy"), ("USDT", "Sell"), ("USDC", "Sell")]
         with source_guard(c.BITGET_NAME):
             currencies = []
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 for asset, tradeType in pairs:
                     try:
                         currencies.append(
@@ -458,6 +458,10 @@ class DollarService:
         invocan. Los fallos de red/HTTP los traduce ese guard; aquí solo se
         lanzan errores tipados de parseo/vacío cuando la estructura no cuadra.
         """
+        # Exchange Monitor usa su PROPIO cliente efímero (no el compartido de la
+        # app): el flujo CSRF depende de la cookie de sesión PHPSESSID emitida en
+        # el paso 1 y consumida en el paso 2; un cliente compartido acumularía
+        # cookies entre requests y podría corromper el handshake CSRF.
         async with httpx.AsyncClient(
             headers={"User-Agent": c.EM_USER_AGENT},
             follow_redirects=True,
@@ -669,7 +673,7 @@ class DollarService:
     async def get_raw_binance_currencies(self) -> List[Currency]:
         """Obtiene las 4 tasas de Binance (USDT/USDC Buy/Sell) y devuelve una lista de objetos Currency."""
         with source_guard(c.BINANCE_NAME):
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 tasks = [
                     self.getCurrenciesByBinance(client, "USDT", "VES", "Buy"),
                     self.getCurrenciesByBinance(client, "USDC", "VES", "Buy"),
