@@ -123,6 +123,7 @@ Reglas que el asistente debe respetar en todo el flujo `issue → rama → commi
 | `schema-naming-convention.md` | Convención de nombres del esquema de base de datos |
 | `database-schema-sync.md` | Sincronización entre modelos y esquema documentado |
 | `documentation-convention.md` | Todo método/endpoint/fuente nuevo nace documentado igual que el resto (docstring, OpenAPI y listas de fuentes sincronizadas) |
+| `logging-convention.md` | Obliga a usar logging estructurado (`api/core/logging/logger.py`), no `print()`, en todo `api/` (con check en CI) |
 
 #### `roles/` — Expertos especializados
 Personas que orientan al asistente según el tipo de tarea:

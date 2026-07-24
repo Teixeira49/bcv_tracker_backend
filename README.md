@@ -122,6 +122,12 @@ Las principales librerías utilizadas en este proyecto son:
    ```
    > Las URLs mostradas son **placeholders**. Coloca las URLs reales de los proveedores solo en tu `.env` local y en las variables del entorno de despliegue (Vercel), nunca en archivos versionados. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 
+   Variable **opcional** de configuración:
+   ```env
+   # Nivel de logging: DEBUG, INFO, WARNING, ERROR o CRITICAL (INFO por defecto).
+   LOG_LEVEL=INFO
+   ```
+
 5. **Inicializar / migrar el esquema**:
 
    El esquema se gestiona con **Alembic**. La configuración vive en `alembic.ini` y las migraciones en `migrations/` (`migrations/versions/` contiene la línea base `0001_initial_schema`, con las tablas `currencies` y `platform_dates`). Alembic toma la URL de la BD de la variable de entorno `DATABASE_URL` (la misma que usa la app; no se hardcodea en `alembic.ini`).
