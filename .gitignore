@@ -12,6 +12,13 @@ venv/
 # Logs and others
 git_history.txt
 
+# Artefactos de base de datos local (la app usa PostgreSQL vía DATABASE_URL;
+# los .db/.sqlite son residuos de SQLite que no deben versionarse)
+*.db
+*.sqlite
+*.sqlite3
+api/data/
+
 # Documentación interna (NO se versiona).
 # Sí se versionan: docs/DEPLOYMENT.md y docs/release/.
 # - docs/schema/: esquema semántico interno de la BD
