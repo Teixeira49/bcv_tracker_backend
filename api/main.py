@@ -10,6 +10,13 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
+# Configura el logging estructurado del proyecto una sola vez, antes de montar
+# la app, para que tanto el lifespan como los handlers registren con formato y
+# niveles consistentes (ver api/core/logging/logger.py).
+from api.core.logging.logger import configure_logging, get_logger
+configure_logging()
+logger = get_logger("main")
+
 from api.openapi.redoc_theme import get_custom_redoc_html
 
 
@@ -32,7 +39,7 @@ async def lifespan(app: FastAPI):
         from api.services.bd_service import init_db
         init_db()
     except Exception:
-        traceback.print_exc()
+        logger.exception("Fallo al inicializar el esquema de la BD en el arranque")
     yield
 
 
@@ -132,7 +139,7 @@ try:
         # uniforme. Se registra el traceback en el servidor (no se pierde la
         # información) pero al cliente solo se le devuelve un mensaje genérico,
         # sin filtrar detalles internos.
-        traceback.print_exc()
+        logger.exception("Excepción no controlada en %s %s", request.method, request.url.path)
         return error_response(
             message=c.INTERNAL_ERROR_MSG,
             status_code=c.STATUS_INTERNAL_SERVER_ERROR,
