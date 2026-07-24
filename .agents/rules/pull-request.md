@@ -248,7 +248,9 @@ Describa las pruebas que ejecutó para verificar los cambios. Proporcione instru
 - [ ] Mis cambios no generan nuevas advertencias
 - [ ] Mis cambios pasan el build y lint del proyecto localmente
 - [ ] He agregado pruebas que prueban que mi solución es efectiva o que mi función funciona
+- [ ] Si agregué o modifiqué un endpoint o una fuente de tasa, incluí sus tests en este mismo PR (ver `test-coverage.md`)
 - [ ] Las pruebas unitarias nuevas y existentes pasan localmente con mis cambios
+- [ ] La suite `pytest` corre en verde en CI (`.github/workflows/tests.yml`)
 ```
 
 Pautas de llenado (usa el objetivo/criterios del issue vinculado —si existe— + los commits):
