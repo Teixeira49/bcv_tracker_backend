@@ -481,7 +481,11 @@ async def update_currencies(
             all_currencies.extend(res)
 
     if not all_currencies:
-        return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_currencies": 0})
+        # Misma forma y nombres de campo que el camino de éxito
+        # (``save_currencies_to_db_async`` devuelve ``updated_count``) y que el
+        # alias de ``UpdateCurrenciesResponseData``, para no depender de
+        # ``populate_by_name`` ni divergir entre caminos.
+        return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_count": 0})
 
     result = await dollar_service.save_currencies_to_db_async(all_currencies)
     return api_response(result)
