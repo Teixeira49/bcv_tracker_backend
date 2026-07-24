@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import api.main as main
-from api.controller.dollar_controller import dollar_service
+from api.controller.venezuela_controller import dollar_service
 from api.core.client.http_client import HttpClient
 
 

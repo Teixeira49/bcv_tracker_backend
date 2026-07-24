@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
     app.state.http_client = secure_client
     app.state.http_client_insecure = insecure_client
     try:
-        from api.controller.dollar_controller import dollar_service
+        from api.controller.venezuela_controller import dollar_service
         dollar_service.client.set_shared_clients(secure=secure_client, insecure=insecure_client)
     except Exception:
         logger.exception("No se pudieron inyectar los clientes HTTP compartidos")
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         try:
-            from api.controller.dollar_controller import dollar_service
+            from api.controller.venezuela_controller import dollar_service
             dollar_service.client.set_shared_clients(secure=None, insecure=None)
         except Exception:
             logger.exception("No se pudieron limpiar los clientes HTTP compartidos")
