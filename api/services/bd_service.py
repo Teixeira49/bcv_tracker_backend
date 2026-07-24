@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from typing import List
 
@@ -25,18 +25,6 @@ def init_db():
     de que las tablas existan en entornos efímeros (serverless / cold start).
     """
     Base.metadata.create_all(bind=engine)
-
-def reset_db():
-    """Comprueba si la tabla existe y la elimina para reiniciarla."""
-    inspector = inspect(engine)
-    # Verificamos si la tabla 'currencies' existe
-    if inspector.has_table(Currency.__tablename__):
-        print(f"Reiniciando tabla: {Currency.__tablename__}")
-        # Eliminamos solo la tabla específica
-        Currency.__table__.drop(engine)
-    
-    # Volvemos a crear las tablas
-    init_db()
 
 def save_currencies_to_db(currencies: List[Currency]):
     """Persiste (upsert) una lista de monedas y calcula su variación (ROC).
