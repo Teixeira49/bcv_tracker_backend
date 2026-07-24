@@ -138,6 +138,8 @@ Las principales librerías utilizadas en este proyecto son:
    ```
 
    > Además, al **arrancar** la app (`lifespan` de `api/main.py`) se ejecuta `init_db()` una sola vez: un `create_all` idempotente que garantiza que las tablas existan en entornos efímeros (serverless / cold start). No sustituye a las migraciones —Alembic es la fuente de verdad del esquema versionado—, solo evita que un cold start sin `alembic upgrade head` previo deje la app sin tablas.
+   >
+   > 📋 Las convenciones completas para **crear y ejecutar migraciones** (nomenclatura, qué está y qué no permitido, orden de ejecución, verificación) están en la regla [`.agents/rules/alembic-migrations.md`](.agents/rules/alembic-migrations.md).
 
 6. **Iniciar el servidor**:
    ```bash
