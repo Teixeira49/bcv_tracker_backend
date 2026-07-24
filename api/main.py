@@ -34,13 +34,44 @@ async def lifespan(app: FastAPI):
     Un fallo de inicialización (p. ej. BD momentáneamente inaccesible) se registra
     pero NO aborta el arranque: los endpoints en vivo (scraping) siguen operativos
     y solo los que tocan BD degradarían de forma controlada.
+
+    Además crea los ``httpx.AsyncClient`` **compartidos a nivel de app** (uno con
+    verificación TLS y otro sin ella, este último solo para el host del BCV) y
+    los inyecta en el ``HttpClient`` del servicio, para reutilizar conexiones
+    (keep-alive TCP/TLS) entre requests. En serverless (Fluid Compute) la
+    instancia se reutiliza, así que el pool persiste; se cierran limpiamente en
+    el shutdown.
     """
     try:
         from api.services.bd_service import init_db
         init_db()
     except Exception:
         logger.exception("Fallo al inicializar el esquema de la BD en el arranque")
-    yield
+
+    import httpx
+    from api.utils.constants.constants import Constants as c
+    secure_client = httpx.AsyncClient(verify=True)
+    # `verify=c.VERIFY` (False): cliente sin TLS reservado al host del BCV; el
+    # HttpClient solo lo usa cuando la llamada pide verify=False explícitamente.
+    insecure_client = httpx.AsyncClient(verify=c.VERIFY)
+    app.state.http_client = secure_client
+    app.state.http_client_insecure = insecure_client
+    try:
+        from api.controller.dollar_controller import dollar_service
+        dollar_service.client.set_shared_clients(secure=secure_client, insecure=insecure_client)
+    except Exception:
+        logger.exception("No se pudieron inyectar los clientes HTTP compartidos")
+
+    try:
+        yield
+    finally:
+        try:
+            from api.controller.dollar_controller import dollar_service
+            dollar_service.client.set_shared_clients(secure=None, insecure=None)
+        except Exception:
+            logger.exception("No se pudieron limpiar los clientes HTTP compartidos")
+        await secure_client.aclose()
+        await insecure_client.aclose()
 
 
 # Configuramos la app desactivando las docs por defecto para personalizarlas
