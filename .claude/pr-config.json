@@ -4,5 +4,20 @@
   "productionBranch": "main",
   "triggerMode": "ask",
   "draftsDir": "docs/pull-requests/",
-  "reviewers": []
+  "reviewers": [],
+  "assignSelf": true,
+  "selfAssignee": "Teixeira49",
+  "labelsByType": {
+    "feat": "enhancement",
+    "fix": "bug",
+    "hotfix": "bug",
+    "refactor": "refactor",
+    "docs": "documentation",
+    "chore": "chore",
+    "build": "build",
+    "test": "test",
+    "ci": "ci",
+    "style": "style",
+    "perf": "performance"
+  }
 }
