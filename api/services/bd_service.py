@@ -39,12 +39,35 @@ def save_currencies_to_db(currencies: List[Currency]):
     session = SessionLocal()
     try:
         now = Helper().getZoneTime()
+
+        # Precarga en UNA sola consulta las filas existentes de los (code, platform)
+        # del lote, en lugar de un SELECT por moneda (patrón N+1). El número de
+        # queries de lectura es constante e independiente de la cantidad de monedas.
+        # La sesión usa autoflush=False, así que —igual que antes— ninguna
+        # inserción/actualización del lote es visible dentro del propio bucle.
+        codes = {cur.code for cur in currencies}
+        platforms = {cur.platform for cur in currencies}
+        existing_by_key = {}
+        if codes and platforms:
+            existing_rows = (
+                session.query(Currency)
+                .filter(Currency.code.in_(codes), Currency.platform.in_(platforms))
+                .order_by(Currency.id.asc())
+                .all()
+            )
+            for row in existing_rows:
+                key = (row.code, row.platform)
+                # Conserva la primera fila por clave (id más bajo), replicando el
+                # `.first()` (sin orden explícito) del acceso previo. Se guarda la
+                # entidad ORM, no solo el valor, para preservar la semántica del
+                # identity map cuando el lote trae varias monedas con el mismo
+                # (code, platform) (p. ej. Binance buy/sell).
+                if key not in existing_by_key:
+                    existing_by_key[key] = row
+
         for cur in currencies:
-            # Intenta obtener el registro existente con el mismo código y valor de todayData
-            existing_row = session.query(Currency).filter(
-                Currency.code == cur.code,
-                Currency.platform == cur.platform,
-            ).first()
+            # Registro existente con el mismo código y plataforma (precargado).
+            existing_row = existing_by_key.get((cur.code, cur.platform))
 
             # actualizar o crear el registro "todayData == True"
             if existing_row:
