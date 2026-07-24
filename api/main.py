@@ -89,7 +89,9 @@ try:
     # Intenta importar tus módulos normalmente
     from api.utils.html.root_html import root_html
     from api.utils.constants.constants import Constants as c
-    from api.controller.venezuela_controller import router as controller_app
+    # El router de negocio lo POSEE la versión (ver api/router/v1.py y
+    # docs/architecture/api-versioning.md): v1 ensambla los controllers por país.
+    from api.router.v1 import router as v1_router
     from api.utils.constants.tags_metadata import tags_metadata
     from api.controller.docs_controller import router as docs_router
     from api.controller.health_controller import router as health_router
@@ -102,10 +104,11 @@ try:
     app.contact = c.APP_CONTACT
     app.openapi_tags = tags_metadata
     
-    # Endpoints de negocio: versionados por path bajo `/api/v1` (ver
-    # Constants.API_V1_STR). El router ya aporta el segmento de país
-    # (`/venezuela`) → resultado `/api/v1/venezuela/...`.
-    app.include_router(controller_app, prefix=c.API_V1_STR)
+    # Endpoints de negocio: el router de versión v1 se monta bajo `/api/v1`
+    # (Constants.API_V1_STR). v1 ya ensambla los controllers por país, que
+    # aportan su segmento (`/venezuela`) → resultado `/api/v1/venezuela/...`.
+    # Un futuro v2 se montaría análogamente con API_V2_STR sin tocar v1.
+    app.include_router(v1_router, prefix=c.API_V1_STR)
     # Infraestructura sin versionar: la documentación y el health/monitoreo
     # exponen URLs estables e independientes de la versión del contrato.
     app.include_router(docs_router)  # Inyectamos el router de documentación
