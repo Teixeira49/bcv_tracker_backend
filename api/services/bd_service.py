@@ -17,7 +17,13 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
-    """Crear tablas si no existen."""
+    """Crea las tablas si no existen.
+
+    Se invoca UNA sola vez en el arranque de la app (evento ``lifespan`` de
+    ``api/main.py``), no por request. El esquema versionado lo gobierna Alembic
+    (``alembic upgrade head``); este ``create_all`` es una garantía idempotente
+    de que las tablas existan en entornos efímeros (serverless / cold start).
+    """
     Base.metadata.create_all(bind=engine)
 
 def reset_db():
@@ -42,7 +48,6 @@ def save_currencies_to_db(currencies: List[Currency]):
 
     :param currencies: monedas a guardar o actualizar.
     """
-    init_db()
     session = SessionLocal()
     try:
         now = Helper().getZoneTime()
@@ -95,7 +100,6 @@ def save_platform_date(platform: str, date_value: str):
     :param platform: nombre de la plataforma (p. ej. ``"Banco Central de Venezuela"``).
     :param date_value: fecha reportada por la fuente, como texto.
     """
-    init_db()
     session = SessionLocal()
     try:
         now = Helper().getZoneTime()

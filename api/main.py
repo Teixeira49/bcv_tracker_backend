@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse, Response
@@ -11,11 +12,36 @@ load_dotenv(dotenv_path=env_path)
 
 from api.openapi.redoc_theme import get_custom_redoc_html
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ciclo de vida de la app: inicializa el esquema de la BD UNA sola vez.
+
+    ``init_db()`` (``create_all``) se ejecuta aquí, en el arranque, y ya no en
+    cada operación de escritura (antes se llamaba por request en
+    ``save_currencies_to_db`` / ``save_platform_date``). El esquema versionado lo
+    gobierna Alembic (``alembic upgrade head``); este ``create_all`` es una
+    garantía idempotente de que las tablas existan en entornos efímeros
+    (serverless / cold start), sin sustituir a las migraciones.
+
+    Un fallo de inicialización (p. ej. BD momentáneamente inaccesible) se registra
+    pero NO aborta el arranque: los endpoints en vivo (scraping) siguen operativos
+    y solo los que tocan BD degradarían de forma controlada.
+    """
+    try:
+        from api.services.bd_service import init_db
+        init_db()
+    except Exception:
+        traceback.print_exc()
+    yield
+
+
 # Configuramos la app desactivando las docs por defecto para personalizarlas
 app = FastAPI(
     title="DolarTracker",
     redoc_url=None, # Desactivamos el ReDoc nativo para usar nuestra versión premium
     docs_url=None,  # Desactivamos el Swagger nativo para inyectar nuestro CSS oscuro
+    lifespan=lifespan,
 )
 
 def custom_openapi():
