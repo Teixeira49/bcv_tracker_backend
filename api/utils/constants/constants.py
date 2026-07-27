@@ -32,7 +32,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
         "url": "https://github.com/Teixeira49",
     }
 
-    VERSION = "2.1.1"
+    VERSION = "3.0.0"
 
     # Prefijo de versión del contrato de la API (versionado por path). Es
     # independiente de VERSION (versión semántica de la app / metadata OpenAPI):
@@ -52,6 +52,20 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     VERIFY = False
 
     HTTP_TIMEOUT = 10.0
+
+    # --- Logging ---
+    # Namespace raíz de los loggers del proyecto. Todo logger se cuelga de aquí
+    # (`dolartracker.<modulo>`) para configurarse en un solo punto sin pisar la
+    # configuración de uvicorn.
+    LOGGER_NAMESPACE = "dolartracker"
+
+    # Nivel por defecto si no se define la variable de entorno LOG_LEVEL.
+    LOG_LEVEL_DEFAULT = "INFO"
+
+    # Formato estructurado y consistente de cada línea de log.
+    LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+
+    LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
     STATUS_OK = 200
 

@@ -10,6 +10,13 @@ from dotenv import load_dotenv
 env_path = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
+# Configura el logging estructurado del proyecto una sola vez, antes de montar
+# la app, para que tanto el lifespan como los handlers registren con formato y
+# niveles consistentes (ver api/core/logging/logger.py).
+from api.core.logging.logger import configure_logging, get_logger
+configure_logging()
+logger = get_logger("main")
+
 from api.openapi.redoc_theme import get_custom_redoc_html
 
 
@@ -27,13 +34,44 @@ async def lifespan(app: FastAPI):
     Un fallo de inicialización (p. ej. BD momentáneamente inaccesible) se registra
     pero NO aborta el arranque: los endpoints en vivo (scraping) siguen operativos
     y solo los que tocan BD degradarían de forma controlada.
+
+    Además crea los ``httpx.AsyncClient`` **compartidos a nivel de app** (uno con
+    verificación TLS y otro sin ella, este último solo para el host del BCV) y
+    los inyecta en el ``HttpClient`` del servicio, para reutilizar conexiones
+    (keep-alive TCP/TLS) entre requests. En serverless (Fluid Compute) la
+    instancia se reutiliza, así que el pool persiste; se cierran limpiamente en
+    el shutdown.
     """
     try:
         from api.services.bd_service import init_db
         init_db()
     except Exception:
-        traceback.print_exc()
-    yield
+        logger.exception("Fallo al inicializar el esquema de la BD en el arranque")
+
+    import httpx
+    from api.utils.constants.constants import Constants as c
+    secure_client = httpx.AsyncClient(verify=True)
+    # `verify=c.VERIFY` (False): cliente sin TLS reservado al host del BCV; el
+    # HttpClient solo lo usa cuando la llamada pide verify=False explícitamente.
+    insecure_client = httpx.AsyncClient(verify=c.VERIFY)
+    app.state.http_client = secure_client
+    app.state.http_client_insecure = insecure_client
+    try:
+        from api.controller.venezuela_controller import dollar_service
+        dollar_service.client.set_shared_clients(secure=secure_client, insecure=insecure_client)
+    except Exception:
+        logger.exception("No se pudieron inyectar los clientes HTTP compartidos")
+
+    try:
+        yield
+    finally:
+        try:
+            from api.controller.venezuela_controller import dollar_service
+            dollar_service.client.set_shared_clients(secure=None, insecure=None)
+        except Exception:
+            logger.exception("No se pudieron limpiar los clientes HTTP compartidos")
+        await secure_client.aclose()
+        await insecure_client.aclose()
 
 
 # Configuramos la app desactivando las docs por defecto para personalizarlas
@@ -82,7 +120,9 @@ try:
     # Intenta importar tus módulos normalmente
     from api.utils.html.root_html import root_html
     from api.utils.constants.constants import Constants as c
-    from api.controller.dollar_controller import router as controller_app
+    # El router de negocio lo POSEE la versión (ver api/router/v1.py y
+    # docs/architecture/api-versioning.md): v1 ensambla los controllers por país.
+    from api.router.v1 import router as v1_router
     from api.utils.constants.tags_metadata import tags_metadata
     from api.controller.docs_controller import router as docs_router
     from api.controller.health_controller import router as health_router
@@ -95,10 +135,11 @@ try:
     app.contact = c.APP_CONTACT
     app.openapi_tags = tags_metadata
     
-    # Endpoints de negocio: versionados por path bajo `/api/v1` (ver
-    # Constants.API_V1_STR). El router ya aporta el segmento de país
-    # (`/venezuela`) → resultado `/api/v1/venezuela/...`.
-    app.include_router(controller_app, prefix=c.API_V1_STR)
+    # Endpoints de negocio: el router de versión v1 se monta bajo `/api/v1`
+    # (Constants.API_V1_STR). v1 ya ensambla los controllers por país, que
+    # aportan su segmento (`/venezuela`) → resultado `/api/v1/venezuela/...`.
+    # Un futuro v2 se montaría análogamente con API_V2_STR sin tocar v1.
+    app.include_router(v1_router, prefix=c.API_V1_STR)
     # Infraestructura sin versionar: la documentación y el health/monitoreo
     # exponen URLs estables e independientes de la versión del contrato.
     app.include_router(docs_router)  # Inyectamos el router de documentación
@@ -132,7 +173,7 @@ try:
         # uniforme. Se registra el traceback en el servidor (no se pierde la
         # información) pero al cliente solo se le devuelve un mensaje genérico,
         # sin filtrar detalles internos.
-        traceback.print_exc()
+        logger.exception("Excepción no controlada en %s %s", request.method, request.url.path)
         return error_response(
             message=c.INTERNAL_ERROR_MSG,
             status_code=c.STATUS_INTERNAL_SERVER_ERROR,

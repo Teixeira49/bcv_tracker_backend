@@ -5,6 +5,34 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y el proyecto sigue [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.0.0] - 2026-07-26
+
+_The Contract & Performance Update. Detalle completo en [`docs/release/RELEASE_v3.0.0.md`](docs/release/RELEASE_v3.0.0.md)._
+
+### Added
+- **Body por mercado** (`MarketSelection`) con máquina de estados explícita para `update-currencies` y `saved-currencies`: cada fuente declara su modo (`off`, `solo-dolar`, `todas`, `bd-solo-dolar`, `bd-todas`, `average`, `ambas`, `own`, `own+monitor`), validado por mercado con Pydantic (#71).
+- Soporte de **Docker** funcional: `Dockerfile` (imagen slim, usuario no-root), `.dockerignore` y `docker-compose.yml` con API + PostgreSQL y healthcheck (#25).
+- **Logging estructurado** con logger central namespaced, nivel configurable vía `LOG_LEVEL` (opcional) y guardrail AST que falla si aparece `print()` en `api/` (#26).
+- Router que **posee la versión** (`api/router/v1.py`), preparado para múltiples países y versiones coexistiendo (#52).
+- El cron refresca las **nueve fuentes** con el Body por mercado, con `workflow_dispatch`, fallo visible ante no-2xx y soporte opcional de `UPDATE_API_KEY` (#72).
+
+### Changed
+- **BREAKING**: `update-currencies` y `saved-currencies` dejan de aceptar los flags de query (`bcv`, `yadio`, …, `fill_missing`, `enforce_*`) y reciben un Body por mercado; `saved-currencies` pasa de **GET a POST**. `update-currencies` rechaza los modos `bd-*` con `422` (#71).
+- Lectura de BD acotada **en SQL**: última fila por `(code, platform)` con los filtros de plataforma y solo-dólar empujados a la consulta (#46, #14).
+- `dollar_controller.py` renombrado a `venezuela_controller.py`; las rutas públicas no cambian (#52).
+- Dependencias pinneadas con `==` en `requirements.txt` y `requirements-dev.txt` (#24).
+- `UpdateCurrenciesResponseData` migrado a `model_config = ConfigDict(...)` de Pydantic v2 (#29).
+
+### Fixed
+- Eliminados dos patrones **N+1**: `calculate_live_changes` (#27) y `save_currencies_to_db` (#48) pasan a un número de queries constante, independiente de la cantidad de monedas.
+- Clientes `httpx.AsyncClient` **compartidos a nivel de app** con keep-alive, con aislamiento entre el cliente `verify=True` y el `verify=False` para que la desactivación de TLS del BCV no se filtre a otras fuentes (#50).
+- `update-currencies` devuelve `{message, updated_count}` en ambos caminos, sin depender de `populate_by_name` (#30).
+- Import obsoleto de `dollar_controller` en el `lifespan` y en la suite tras el rename: dejaba de aplicarse el keep-alive y la suite quedaba en rojo.
+- `createCurrency` deja de instanciar `Helper()` dos veces por moneda y el mapa de imágenes de plataforma pasa a constante de clase (#49).
+
+### Removed
+- Paquetes erróneos de `requirements.txt`: `asyncio` (stdlib desde Python 3.4) y `dotenv` (distribución equivocada; la correcta ya estaba como `python-dotenv`) (#24).
+
 ## [2.1.1] - 2026-07-24
 
 _The Maintainability & Foundations Update. Detalle completo en [`docs/release/RELEASE_v2.1.1.md`](docs/release/RELEASE_v2.1.1.md)._
@@ -127,6 +155,7 @@ _The Professionalization Update. Detalle completo en [`docs/release/RELEASE_v1.1
 - Manejo de errores en la importación del router.
 - Simplificación de la lógica de comparación de fechas.
 
+[3.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v1.1.1...v2.0.0

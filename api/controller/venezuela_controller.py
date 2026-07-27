@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 import asyncio
 from typing import List
 from api.models.schemas import BaseResponse, CurrencySchema, BcvResponseData, AllCurrenciesResponseData, UpdateCurrenciesResponseData, ErrorResponse
+from api.models.market_request import MarketSelection, DB_MODES
 
 from api.core.response.response_wrapper import api_response
 from api.services.dollar_services import DollarService
@@ -416,213 +417,57 @@ async def get_exchange_monitor_currencies():
 @router.put(
     "/update-currencies", 
     tags=["Venezuela | Save Data"], 
-    summary="Actualiza y persiste las tasas de cambio en la base de datos",
-    description="Sincroniza la base de datos con los valores más recientes de las fuentes seleccionadas (BCV, Yadio, Binance, Bybit, OKX, Bitget, Airtm, DolarAPI, Exchange Monitor). Ejecuta las tareas en paralelo y guarda tanto las tasas como las fechas de actualización de cada plataforma. De Exchange Monitor se persisten su valor propio y el promedio estimado.",
+    summary="Actualiza y persiste las tasas según el Body por mercado",
+    description="Persiste en la base de datos lo que indique el **Body por mercado** (máquina de estados, ver `MarketSelection`). Solo aplican los modos **en vivo** (`solo-dolar`, `todas`, `average`, `ambas`, `own`, `own+monitor`); los modos de BD (`bd-*`) no son válidos aquí (persiste datos frescos). Un mercado **no mencionado** se trata como `off`. Ejecuta los fetch en paralelo y guarda tasas y fechas de plataforma (BCV/Exchange Monitor).",
     response_model=BaseResponse[UpdateCurrenciesResponseData],
     status_code=status.HTTP_200_OK,
     response_description="Base de datos actualizada correctamente",
     responses={
         200: {"model": BaseResponse[UpdateCurrenciesResponseData], "description": "Base de datos actualizada correctamente"},
-        400: {"model": ErrorResponse, "description": "No se seleccionó ninguna fuente de datos"},
+        422: {"model": ErrorResponse, "description": "Body inválido (modo no permitido para el mercado, o modo 'bd-*' en update)"},
         408: {"model": ErrorResponse, "description": "Tiempo de espera agotado durante la actualización masiva"},
         502: {"model": ErrorResponse, "description": "Alguna de las fuentes seleccionadas no está disponible o respondió con un error"},
         500: {"model": ErrorResponse, "description": "Error durante el proceso de actualización y guardado"}
     }
 )
-async def update_currencies(
-    bcv: bool = Query(True, description="Incluir y guardar tasas del BCV."),
-    yadio: bool = Query(True, description="Incluir y guardar tasas de Yadio.io."),
-    binance: bool = Query(True, description="Incluir y guardar tasas de Binance P2P."),
-    bybit: bool = Query(True, description="Incluir y guardar tasas de Bybit P2P."),
-    okx: bool = Query(True, description="Incluir y guardar tasas de OKX P2P."),
-    bitget: bool = Query(True, description="Incluir y guardar tasas de Bitget P2P."),
-    airtm: bool = Query(True, description="Incluir y guardar tasas de Airtm (compra/venta del dólar)."),
-    dolarapi: bool = Query(True, description="Incluir y guardar tasas de DolarAPI (oficial y paralelo)."),
-    exchange_monitor: bool = Query(True, description="Incluir y guardar el valor propio y el promedio de Exchange Monitor.")
-):
-    """
-    Ejecuta el scraping/fetch de las fuentes seleccionadas y actualiza los
-    registros correspondientes en la base de datos.
-    """
-    # (flag, factory de la corrutina raw, plataforma cuya fecha persistir | None).
-    # BCV y Exchange Monitor devuelven {date, currencies} y guardan su fecha; el
-    # resto devuelve una lista de Currency. El orden es irrelevante: se emparejan
-    # resultados con fuentes vía zip (sin índices frágiles).
-    sources = [
-        (bcv, dollar_service.get_raw_bcv_currencies, c.BCV_NAME),
-        (yadio, dollar_service.get_raw_yadio_currencies, None),
-        (binance, dollar_service.get_raw_binance_currencies, None),
-        (bybit, dollar_service.get_raw_bybit_currencies, None),
-        (okx, dollar_service.get_raw_okx_currencies, None),
-        (bitget, dollar_service.get_raw_bitget_currencies, None),
-        (airtm, dollar_service.get_raw_airtm_currencies, None),
-        (dolarapi, dollar_service.get_raw_dolarapi_currencies, None),
-        (exchange_monitor, dollar_service.get_raw_exchange_monitor_currencies, c.EXCHANGE_MONITOR_NAME),
-    ]
-    selected = [(factory, date_platform) for flag, factory, date_platform in sources if flag]
+async def update_currencies(selection: MarketSelection):
+    """Persiste las tasas frescas de las fuentes según el Body por mercado.
 
-    if not selected:
+    Los modos de BD (`bd-*`) no tienen sentido al persistir datos en vivo: si el
+    Body los incluye, se rechaza con 422. La orquestación (fetch en paralelo,
+    filtrado por modo, persistencia) vive en el servicio (`update_from_selection`).
+    """
+    db_markets = sorted(m.value for m, mode in selection.active().items() if mode in DB_MODES)
+    if db_markets:
         raise HTTPException(
-            status_code=400,
-            detail="Debe seleccionar al menos una fuente para actualizar. Use los query params: bcv, yadio, binance, bybit, okx, bitget, airtm, dolarapi, exchange_monitor."
+            status_code=422,
+            detail=("Los modos 'bd-*' no son válidos en update-currencies (persiste datos en vivo). "
+                    "Mercados afectados: " + ", ".join(db_markets) + "."),
         )
-
-    results = await asyncio.gather(*(factory() for factory, _ in selected))
-
-    all_currencies = []
-    for (_, date_platform), res in zip(selected, results):
-        # Fuentes con {date, currencies} (BCV, Exchange Monitor): extraemos las
-        # monedas y persistimos su fecha de plataforma. El resto son listas.
-        if isinstance(res, dict):
-            all_currencies.extend(res.get("currencies", []))
-            if date_platform and res.get("date"):
-                await dollar_service.save_platform_date_async(date_platform, res["date"])
-        elif isinstance(res, list):
-            all_currencies.extend(res)
-
-    if not all_currencies:
-        return api_response(data={"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_currencies": 0})
-
-    result = await dollar_service.save_currencies_to_db_async(all_currencies)
+    result = await dollar_service.update_from_selection(selection)
     return api_response(result)
     
-@router.get(
-    "/saved-currencies", 
-    tags=["Venezuela | Save Data"], 
-    summary="Recupera las últimas tasas guardadas en la base de datos con filtros avanzados",
-    description="Permite consultar el histórico más reciente de tasas almacenadas. Ofrece filtros por plataforma y opciones para completar datos faltantes en vivo (`fill_missing`), forzar el retorno exclusivo del valor del dólar para BCV y Yadio, y acotar Exchange Monitor a su valor propio (`enforce_em_own`) o a su promedio (`enforce_em_average`) de forma independiente.",
+@router.post(
+    "/saved-currencies",
+    tags=["Venezuela | Save Data"],
+    summary="Recupera tasas (BD y/o en vivo) según el Body por mercado",
+    description="Devuelve, por mercado, lo que indique el **Body** (máquina de estados, ver `MarketSelection`): los modos `bd-*` leen de la **BD** (última fila por code+platform, filtros en SQL) y los modos en vivo hacen **fetch** y calculan el ROC vs BD. Un mercado **no mencionado** se trata como `off`. Es **POST** (no GET) porque acepta un Body estructurado (GET-con-body no es fiable entre clientes).",
     response_model=BaseResponse[List[CurrencySchema]],
     status_code=status.HTTP_200_OK,
-    response_description="Tasas históricas/guardadas recuperadas exitosamente",
+    response_description="Tasas recuperadas exitosamente",
     responses={
-        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas históricas/guardadas recuperadas exitosamente"},
-        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al recuperar datos de la base de datos"},
-        502: {"model": ErrorResponse, "description": "Una fuente en vivo (fill_missing) no está disponible o respondió con un error"},
-        500: {"model": ErrorResponse, "description": "Error al recuperar datos históricos"}
+        200: {"model": BaseResponse[List[CurrencySchema]], "description": "Tasas recuperadas exitosamente"},
+        422: {"model": ErrorResponse, "description": "Body inválido (modo no permitido para el mercado)"},
+        408: {"model": ErrorResponse, "description": "Tiempo de espera agotado al recuperar datos"},
+        502: {"model": ErrorResponse, "description": "Una fuente en vivo no está disponible o respondió con un error"},
+        500: {"model": ErrorResponse, "description": "Error al recuperar los datos"}
     }
 )
-async def get_saved_currencies(
-    bcv: bool = Query(False, description="Incluir tasas guardadas del BCV."),
-    yadio: bool = Query(False, description="Incluir tasas guardadas de Yadio.io."),
-    binance: bool = Query(False, description="Incluir tasas guardadas de Binance P2P."),
-    bybit: bool = Query(False, description="Incluir tasas guardadas de Bybit P2P."),
-    okx: bool = Query(False, description="Incluir tasas guardadas de OKX P2P."),
-    bitget: bool = Query(False, description="Incluir tasas guardadas de Bitget P2P."),
-    airtm: bool = Query(False, description="Incluir tasas guardadas de Airtm (compra/venta del dólar)."),
-    dolarapi: bool = Query(False, description="Incluir tasas guardadas de DolarAPI (oficial y paralelo)."),
-    exchange_monitor: bool = Query(False, description="Incluir tasas guardadas de Exchange Monitor (valor propio + promedio)."),
-    fill_missing: bool = Query(False, description="Si es True, completa las plataformas no seleccionadas con datos en vivo."),
-    enforce_bcv_dollar: bool = Query(False, description="Si es True, filtra resultados del BCV para mostrar solo el Dólar."),
-    enforce_yadio_dollar: bool = Query(False, description="Si es True, filtra resultados de Yadio para mostrar solo el Dólar."),
-    enforce_em_own: bool = Query(False, description="Si es True, filtra Exchange Monitor para mostrar solo su valor propio (\"Exchange Monitor\")."),
-    enforce_em_average: bool = Query(False, description="Si es True, filtra Exchange Monitor para mostrar solo su promedio estimado (\"Monitor Dólar\").")
-):
+async def get_saved_currencies(selection: MarketSelection):
+    """Retorna las tasas pedidas por mercado (BD y/o en vivo) según el Body.
+
+    La orquestación (lectura de BD acotada por SQL, fetch en vivo con ROC y
+    concatenación) vive en el servicio (`read_from_selection`).
     """
-    Retorna las últimas tasas de cambio guardadas en la base de datos.
-    Se puede filtrar por una o más fuentes de datos.
-    Si no se especifica ninguna fuente y fill_missing es False, se retornarán todas las monedas guardadas.
-    Si fill_missing es True, las fuentes en False se obtendrán en vivo.
-    """
-    db_platforms = []
-    live_tasks = []
-
-    # Lógica para determinar origen de datos por plataforma
-    if bcv:
-        db_platforms.append(c.BCV_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_bcv_currencies())
-
-    if yadio:
-        db_platforms.append(c.YADIO_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_yadio_currencies())
-
-    if binance:
-        db_platforms.append(c.BINANCE_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_binance_currencies())
-
-    if bybit:
-        db_platforms.append(c.BYBIT_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_bybit_currencies())
-
-    if okx:
-        db_platforms.append(c.OKX_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_okx_currencies())
-
-    if bitget:
-        db_platforms.append(c.BITGET_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_bitget_currencies())
-
-    if airtm:
-        db_platforms.append(c.AIRTM_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_airtm_currencies())
-
-    if dolarapi:
-        db_platforms.append(c.DOLARAPI_NAME)
-    elif fill_missing:
-        live_tasks.append(dollar_service.get_raw_dolarapi_currencies())
-
-    if exchange_monitor:
-        db_platforms.append(c.EXCHANGE_MONITOR_NAME)
-    elif fill_missing:
-        # En vivo se persisten solo valor propio + promedio (dict {date, currencies}),
-        # que el bloque de abajo aplana igual que BCV.
-        live_tasks.append(dollar_service.get_raw_exchange_monitor_currencies())
-
-    results = []
-
-    # 1. Obtener datos de BD
-    # Si fill_missing es True, solo buscamos en BD si hay plataformas explícitas.
-    # Si fill_missing es False, mantenemos el comportamiento original (si no hay flags, trae todo).
-    if not fill_missing or db_platforms:
-        results.extend(await dollar_service.getSavedCurrencies(platforms=db_platforms))
-
-    # 2. Obtener datos en vivo (si aplica)
-    if live_tasks:
-        list_of_lists = await asyncio.gather(*live_tasks)
-        live_currencies_flat = []
-        for sublist in list_of_lists:
-            # Manejo especial para BCV que retorna dict {'date':..., 'currencies':...}
-            if isinstance(sublist, dict) and "currencies" in sublist:
-                live_currencies_flat.extend(sublist["currencies"])
-            elif isinstance(sublist, list):
-                live_currencies_flat.extend(sublist)
-
-        # Calculamos el indicador ROC comparando con BD
-        if live_currencies_flat:
-            processed_live = await dollar_service.calculate_live_changes(live_currencies_flat)
-            for currency in processed_live:
-                results.append(dollar_service.serialize_with_image(currency))
-
-    # 3. Filtrado por enforce flags
-    # Exchange Monitor persiste dos entradas ("Exchange Monitor" = valor propio,
-    # code `em`; "Monitor Dólar" = promedio, code `average`). Los flags
-    # enforce_em_* son independientes: cada uno habilita su code; si ninguno está
-    # activo no se filtra (ambas pasan); si ambos están activos pasan ambas.
-    em_allowed_codes = set()
-    if enforce_em_own:
-        em_allowed_codes.add(c.EM_CODE_OWN)
-    if enforce_em_average:
-        em_allowed_codes.add(c.EM_CODE_AVERAGE)
-    enforce_em = bool(em_allowed_codes)
-
-    final_results = []
-    for item in results:
-        # Filtro BCV: Si enforce está activo y es BCV, solo pasa si el nombre es "Dolar"
-        if enforce_bcv_dollar and item.get('platform') == c.BCV_NAME and item.get('name') != "Dolar":
-            continue
-        # Filtro Yadio: Si enforce está activo y es Yadio, solo pasa si el nombre es "Dolar"
-        if enforce_yadio_dollar and item.get('platform') == c.YADIO_NAME and item.get('name') != "Dolar":
-            continue
-        # Filtro Exchange Monitor: si algún enforce_em_* está activo, solo pasan
-        # las entradas de EM cuyo code esté habilitado.
-        if enforce_em and item.get('platform') == c.EXCHANGE_MONITOR_NAME and item.get('code') not in em_allowed_codes:
-            continue
-        final_results.append(item)
-
-    return api_response(final_results)
+    results = await dollar_service.read_from_selection(selection)
+    return api_response(results)

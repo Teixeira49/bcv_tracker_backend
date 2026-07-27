@@ -16,7 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from api.controller import dollar_controller
+from api.controller import venezuela_controller
 from api.core.errors.exceptions import SourceTimeoutError, SourceUnavailableError
 from api.utils.constants.constants import Constants as c
 
@@ -32,20 +32,20 @@ def _assert_error_envelope(body):
     assert "detail" not in body
 
 
-def test_400_usa_envelope_uniforme():
-    """La validación de 'ninguna fuente seleccionada' (400) usa el envelope uniforme."""
+def test_422_modo_bd_en_update_usa_envelope_uniforme():
+    """Un modo 'bd-*' en update-currencies (inválido) usa el envelope uniforme (422)."""
     response = client.put(
         f"{c.API_V1_STR}/venezuela/update-currencies",
-        params={"bcv": False, "yadio": False, "binance": False, "bybit": False, "okx": False, "bitget": False, "airtm": False, "dolarapi": False, "exchange_monitor": False},
+        json={"markets": {"bcv": "bd-solo-dolar"}},
     )
-    assert response.status_code == 400
+    assert response.status_code == 422
     _assert_error_envelope(response.json())
 
 
 def test_source_timeout_se_traduce_a_408(monkeypatch):
     """Un SourceTimeoutError se rinde como 408 con la fuente en el mensaje."""
     monkeypatch.setattr(
-        dollar_controller.dollar_service,
+        venezuela_controller.dollar_service,
         "getCurrenciesByBCV",
         AsyncMock(side_effect=SourceTimeoutError(c.BCV_NAME)),
     )
@@ -59,7 +59,7 @@ def test_source_timeout_se_traduce_a_408(monkeypatch):
 def test_source_unavailable_se_traduce_a_502(monkeypatch):
     """Un SourceUnavailableError se rinde como 502 con la fuente en el mensaje."""
     monkeypatch.setattr(
-        dollar_controller.dollar_service,
+        venezuela_controller.dollar_service,
         "getCurrenciesByYadio",
         AsyncMock(side_effect=SourceUnavailableError(c.YADIO_NAME, detail="connection refused")),
     )
@@ -74,7 +74,7 @@ def test_excepcion_no_controlada_devuelve_500_generico(monkeypatch):
     """Una excepción inesperada colapsa a 500 uniforme sin filtrar el detalle interno."""
     secret = "internal-boom-do-not-leak"
     monkeypatch.setattr(
-        dollar_controller.dollar_service,
+        venezuela_controller.dollar_service,
         "getCurrenciesByBCV",
         AsyncMock(side_effect=ValueError(secret)),
     )

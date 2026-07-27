@@ -4,17 +4,45 @@ import httpx
 import asyncio
 from typing import Optional, List
 
+from sqlalchemy import func
+
 from api.core.client.http_client import HttpClient
 from api.core.errors.exceptions import source_guard, SourceEmptyError, SourceParsingError
 from api.models.bd_currency import Currency
+from api.models.market_request import (
+    MarketName, MarketMode, MarketSelection,
+    PLATFORM_BY_MARKET, DB_MODES, LIVE_MODES, DOLLAR_ONLY_MODES,
+)
 from api.services.bd_service import save_currencies_to_db, save_platform_date, get_platform_date, SessionLocal
 from api.utils.constants.constants import Constants as c
 from api.utils.constants.scrapping_tags import ScrappingTags as tag
 from api.utils.helpers.helper import Helper
+from api.core.logging.logger import get_logger
 
 from api.services.dollar_endpoints import DollarEndpoints as endpoints
 
+# Código del dólar (USD) usado por los modos "solo-dólar".
+_USD_CODE = "USD"
+
+logger = get_logger("services.dollar")
+
+
 class DollarService:
+    # Mapa plataforma -> logo. Se define una sola vez a nivel de clase (no se
+    # reconstruye en cada llamada a ``serialize_with_image``, que corre por cada
+    # moneda del path caliente de serialización).
+    PLATFORM_IMAGES = {
+        c.BCV_NAME: c.BCV_LOGO_URL,
+        c.YADIO_NAME: c.YADIO_LOGO_URL,
+        c.BINANCE_NAME: c.BINANCE_LOGO_URL,
+        c.BYBIT_NAME: c.BYBIT_LOGO_URL,
+        c.OKX_NAME: c.OKX_LOGO_URL,
+        c.AIRTM_NAME: c.AIRTM_LOGO_URL,
+        c.BITGET_NAME: c.BITGET_LOGO_URL,
+        c.DOLARAPI_NAME: c.DOLARAPI_LOGO_URL,
+        c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL,
+    }
+
     def __init__(self):
         self.client = HttpClient()
         self.helper = Helper()
@@ -198,7 +226,7 @@ class DollarService:
         propaga tal cual, para no enmascarar caídas reales de la fuente.
         """
         with source_guard(c.BYBIT_NAME):
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 tasks = [
                     self.getCurrenciesByBybit(client, "USDT", "VES", "Buy"),
                     self.getCurrenciesByBybit(client, "USDC", "VES", "Buy"),
@@ -266,7 +294,7 @@ class DollarService:
         ``SourceEmptyError`` (502). Cualquier otro fallo (red, parseo) se propaga.
         """
         with source_guard(c.OKX_NAME):
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 tasks = [
                     self.getCurrenciesByOkx(client, "USDT", "VES", "Buy"),
                     self.getCurrenciesByOkx(client, "USDC", "VES", "Buy"),
@@ -360,7 +388,7 @@ class DollarService:
         pairs = [("USDT", "Buy"), ("USDC", "Buy"), ("USDT", "Sell"), ("USDC", "Sell")]
         with source_guard(c.BITGET_NAME):
             currencies = []
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 for asset, tradeType in pairs:
                     try:
                         currencies.append(
@@ -439,6 +467,10 @@ class DollarService:
         invocan. Los fallos de red/HTTP los traduce ese guard; aquí solo se
         lanzan errores tipados de parseo/vacío cuando la estructura no cuadra.
         """
+        # Exchange Monitor usa su PROPIO cliente efímero (no el compartido de la
+        # app): el flujo CSRF depende de la cookie de sesión PHPSESSID emitida en
+        # el paso 1 y consumida en el paso 2; un cliente compartido acumularía
+        # cookies entre requests y podría corromper el handshake CSRF.
         async with httpx.AsyncClient(
             headers={"User-Agent": c.EM_USER_AGENT},
             follow_redirects=True,
@@ -547,25 +579,162 @@ class DollarService:
         """
         session = SessionLocal()
         try:
-            query = session.query(Currency)
-
-            # Si se proporciona una lista de plataformas y no está vacía, filtra por ellas.
-            if platforms:
-                query = query.filter(Currency.platform.in_(platforms))
-
-            rows = query.order_by(Currency.id.desc()).all()
-
-            result = []
-            for r in rows:
-                serialized_data = self.serialize_with_image(r)
-                serialized_data['id'] = r.id  # Añadimos el ID que no está en to_dict()
-                result.append(serialized_data)
-            return result
-        except Exception as e:
-            print(f"An error occurred while fetching saved currencies: {e}")
+            rows = self._query_latest_rows(session, platforms=platforms)
+            return self._serialize_rows(rows)
+        except Exception:
+            logger.exception("Error al obtener las monedas guardadas de la BD")
             return []
         finally:
             session.close()
+
+    def _query_latest_rows(self, session, platforms=None, dollar_only=False):
+        """Consulta la **última fila por (code, platform)** aplicando los filtros en SQL.
+
+        Empuja a la consulta (issue #46): el filtro por plataforma, la estrategia
+        "último por ``(code, platform)``" (subconsulta ``max(id)`` agrupada, que
+        acota el resultado aunque la tabla crezca con histórico, ver #14) y el
+        filtro de solo-dólar. Así no se trae toda la tabla ni se filtra en Python.
+
+        :param session: sesión SQLAlchemy activa.
+        :param platforms: lista de plataformas por las que filtrar (o ``None``).
+        :param dollar_only: si ``True``, solo filas del dólar (``code == "USD"``).
+        :return: filas ``Currency`` (la última por code+platform).
+        """
+        latest_ids = session.query(func.max(Currency.id))
+        if platforms:
+            latest_ids = latest_ids.filter(Currency.platform.in_(platforms))
+        latest_ids = latest_ids.group_by(Currency.code, Currency.platform)
+
+        query = session.query(Currency).filter(Currency.id.in_(latest_ids))
+        if dollar_only:
+            query = query.filter(Currency.code == _USD_CODE)
+        return query.order_by(Currency.id.desc()).all()
+
+    def _serialize_rows(self, rows) -> List[dict]:
+        """Serializa filas ``Currency`` de BD añadiendo su ``id`` y logo."""
+        result = []
+        for r in rows:
+            serialized_data = self.serialize_with_image(r)
+            serialized_data['id'] = r.id  # Añadimos el ID que no está en to_dict()
+            result.append(serialized_data)
+        return result
+
+    def _fetch_saved_for_platform(self, platform: str, dollar_only: bool = False) -> List[dict]:
+        """Lee de BD la última tasa por code de UNA plataforma (filtros en SQL).
+
+        Usado por la máquina de estados de ``saved-currencies`` (#71): los modos
+        ``bd-todas`` / ``bd-solo-dolar`` mapean a ``dollar_only`` False/True.
+        """
+        session = SessionLocal()
+        try:
+            rows = self._query_latest_rows(session, platforms=[platform], dollar_only=dollar_only)
+            return self._serialize_rows(rows)
+        except Exception:
+            logger.exception("Error al leer de BD la plataforma %s", platform)
+            return []
+        finally:
+            session.close()
+
+    # ------------------------------------------------------------------
+    #  Máquina de estados por mercado (Body de update/saved) — issue #71
+    # ------------------------------------------------------------------
+    def _raw_fetcher_for(self, market: MarketName):
+        """Devuelve la corrutina de fetch en vivo (``get_raw_*``) de un mercado."""
+        return {
+            MarketName.BCV: self.get_raw_bcv_currencies,
+            MarketName.YADIO: self.get_raw_yadio_currencies,
+            MarketName.BINANCE: self.get_raw_binance_currencies,
+            MarketName.BYBIT: self.get_raw_bybit_currencies,
+            MarketName.OKX: self.get_raw_okx_currencies,
+            MarketName.BITGET: self.get_raw_bitget_currencies,
+            MarketName.AIRTM: self.get_raw_airtm_currencies,
+            MarketName.DOLARAPI: self.get_raw_dolarapi_currencies,
+            MarketName.EXCHANGE_MONITOR: self.get_raw_exchange_monitor_currencies,
+        }[market]
+
+    async def _live_market(self, market: MarketName, mode: MarketMode):
+        """Fetch en vivo de un mercado y filtrado según su modo.
+
+        :return: tupla ``(currencies, date)`` — ``Currency`` ya filtradas según el
+            modo y la fecha de plataforma (solo BCV/EM la traen; el resto ``None``).
+        """
+        raw = await self._raw_fetcher_for(market)()
+        # BCV y Exchange Monitor devuelven {date, currencies}; el resto, lista.
+        if isinstance(raw, dict):
+            currencies = raw.get("currencies", [])
+            date = raw.get("date")
+        else:
+            currencies = raw
+            date = None
+
+        platform = PLATFORM_BY_MARKET[market]
+        if mode == MarketMode.AVERAGE:
+            currencies = self.average_by_asset(currencies, platform)
+        elif mode == MarketMode.LIVE_DOLLAR:
+            currencies = [cur for cur in currencies if cur.code == _USD_CODE]
+        elif mode == MarketMode.EM_OWN:
+            currencies = [cur for cur in currencies if cur.code == c.EM_CODE_OWN]
+        # LIVE_ALL / BOTH / EM_OWN_MONITOR: se usan tal cual (el raw de EM ya
+        # acota a valor propio + promedio).
+        return currencies, date
+
+    async def update_from_selection(self, selection: MarketSelection) -> dict:
+        """Persiste en BD lo que indica el Body por mercado (modos en vivo).
+
+        Solo los modos en vivo aplican a la actualización (persistir datos
+        frescos); los modos de BD no tienen sentido aquí (el controlador los
+        rechaza antes). Ejecuta los fetch en paralelo, persiste las monedas y las
+        fechas de plataforma (BCV/EM), y devuelve el conteo persistido.
+        """
+        live = [(m, mode) for m, mode in selection.active().items() if mode in LIVE_MODES]
+        if not live:
+            return {"message": "No se seleccionó ninguna fuente en vivo para actualizar.", "updated_count": 0}
+
+        results = await asyncio.gather(*(self._live_market(m, mode) for m, mode in live))
+
+        all_currencies = []
+        for (market, _mode), (currencies, date) in zip(live, results):
+            all_currencies.extend(currencies)
+            if date:
+                await self.save_platform_date_async(PLATFORM_BY_MARKET[market], date)
+
+        if not all_currencies:
+            return {"message": "No se obtuvieron datos de las fuentes seleccionadas.", "updated_count": 0}
+
+        return await self.save_currencies_to_db_async(all_currencies)
+
+    async def read_from_selection(self, selection: MarketSelection) -> List[dict]:
+        """Lee/devuelve lo que indica el Body por mercado (BD y/o en vivo).
+
+        - Modos ``bd-*``: leen de BD (última fila por code+platform, filtros en SQL).
+        - Modos en vivo: hacen fetch, calculan el ROC vs BD y serializan.
+        Concatena ambos orígenes en una sola lista serializada.
+        """
+        active = selection.active()
+        results = []
+
+        # 1) Lecturas de BD (una consulta acotada por mercado, filtros en SQL).
+        loop = asyncio.get_running_loop()
+        for market, mode in active.items():
+            if mode in DB_MODES:
+                dollar_only = mode in DOLLAR_ONLY_MODES
+                rows = await loop.run_in_executor(
+                    None, self._fetch_saved_for_platform, PLATFORM_BY_MARKET[market], dollar_only
+                )
+                results.extend(rows)
+
+        # 2) Lecturas en vivo (fetch + ROC vs BD + serialización).
+        live = [(m, mode) for m, mode in active.items() if mode in LIVE_MODES]
+        if live:
+            fetched = await asyncio.gather(*(self._live_market(m, mode) for m, mode in live))
+            live_currencies = []
+            for currencies, _date in fetched:
+                live_currencies.extend(currencies)
+            if live_currencies:
+                processed = await self.calculate_live_changes(live_currencies)
+                results.extend(self.serialize_with_image(cur) for cur in processed)
+
+        return results
 
     async def get_stored_bcv_data(self):
         """Retorna las monedas guardadas del BCV junto con la fecha almacenada."""
@@ -650,7 +819,7 @@ class DollarService:
     async def get_raw_binance_currencies(self) -> List[Currency]:
         """Obtiene las 4 tasas de Binance (USDT/USDC Buy/Sell) y devuelve una lista de objetos Currency."""
         with source_guard(c.BINANCE_NAME):
-            async with httpx.AsyncClient() as client:
+            async with self.client.acquire() as client:
                 tasks = [
                     self.getCurrenciesByBinance(client, "USDT", "VES", "Buy"),
                     self.getCurrenciesByBinance(client, "USDC", "VES", "Buy"),
@@ -679,17 +848,38 @@ class DollarService:
         await loop.run_in_executor(None, save_platform_date, platform, date_value)
 
     async def calculate_live_changes(self, currencies: List[Currency]) -> List[Currency]:
-        """Calcula el ROC para una lista de monedas en vivo comparando con la BD."""
+        """Calcula el ROC para una lista de monedas en vivo comparando con la BD.
+
+        Precarga los valores previos almacenados en **una sola** consulta
+        (``IN`` sobre ``code`` y ``platform``) antes del bucle, en lugar de una
+        consulta por moneda (patrón N+1). El número de queries es constante e
+        independiente de la cantidad de monedas. El ROC se calcula reutilizando
+        el helper único ``Helper.rate_of_change``.
+        """
         if not currencies:
             return []
-        
+
         loop = asyncio.get_running_loop()
         def _calc():
             session = SessionLocal()
             try:
+                # Códigos y plataformas del lote en vivo. Se filtran ambos en
+                # SQL (una sola consulta, portable entre SQLite y PostgreSQL);
+                # el par exacto (code, platform) se resuelve luego con el dict.
+                codes = {cur.code for cur in currencies}
+                platforms = {cur.platform for cur in currencies}
+                rows = (
+                    session.query(Currency.code, Currency.platform, Currency.value)
+                    .filter(Currency.code.in_(codes), Currency.platform.in_(platforms))
+                    .order_by(Currency.id.asc())
+                    .all()
+                )
+                # Mapa (code, platform) -> valor previo. Con orden ascendente por
+                # id, el más reciente prevalece si hubiera más de una fila.
+                previous_by_key = {(code, platform): value for code, platform, value in rows}
+
                 for cur in currencies:
-                    existing = session.query(Currency).filter(Currency.code == cur.code, Currency.platform == cur.platform).first()
-                    previous = existing.value if existing else None
+                    previous = previous_by_key.get((cur.code, cur.platform))
                     cur.change = self.helper.rate_of_change(previous, cur.value)
                 return currencies
             finally:
@@ -710,29 +900,21 @@ class DollarService:
         :param change: variación porcentual (ROC); ``0.0`` si no aplica.
         :return: instancia ``Currency`` lista para serializar o persistir.
         """
+        # Una única fuente de tiempo (self.helper), reutilizada para ambas
+        # fechas, en lugar de instanciar Helper() dos veces por moneda.
+        now = self.helper.getZoneTime()
         return Currency(
             code=code.strip(),
             name=name.strip().capitalize(),
             platform=platform,
             value=value,
             change=change,
-            createDate=Helper().getZoneTime(),
-            updateDate=Helper().getZoneTime()
+            createDate=now,
+            updateDate=now
         )
 
     def serialize_with_image(self, currency: Currency) -> dict:
         """Serializa el objeto Currency y añade el link de la imagen de la plataforma."""
         data = currency.to_dict()
-        platform_images = {
-            c.BCV_NAME: c.BCV_LOGO_URL,
-            c.YADIO_NAME: c.YADIO_LOGO_URL,
-            c.BINANCE_NAME: c.BINANCE_LOGO_URL,
-            c.BYBIT_NAME: c.BYBIT_LOGO_URL,
-            c.OKX_NAME: c.OKX_LOGO_URL,
-            c.AIRTM_NAME: c.AIRTM_LOGO_URL,
-            c.BITGET_NAME: c.BITGET_LOGO_URL,
-            c.DOLARAPI_NAME: c.DOLARAPI_LOGO_URL,
-            c.EXCHANGE_MONITOR_NAME: c.EXCHANGE_MONITOR_LOGO_URL
-        }
-        data['platform_img'] = platform_images.get(currency.platform, "")
+        data['platform_img'] = self.PLATFORM_IMAGES.get(currency.platform, "")
         return data

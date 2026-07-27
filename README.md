@@ -122,6 +122,12 @@ Las principales librerías utilizadas en este proyecto son:
    ```
    > Las URLs mostradas son **placeholders**. Coloca las URLs reales de los proveedores solo en tu `.env` local y en las variables del entorno de despliegue (Vercel), nunca en archivos versionados. El `.env` está en `.gitignore` y nunca se versiona (sí se versiona `.env.example`).
 
+   Variable **opcional** de configuración:
+   ```env
+   # Nivel de logging: DEBUG, INFO, WARNING, ERROR o CRITICAL (INFO por defecto).
+   LOG_LEVEL=INFO
+   ```
+
 5. **Inicializar / migrar el esquema**:
 
    El esquema se gestiona con **Alembic**. La configuración vive en `alembic.ini` y las migraciones en `migrations/` (`migrations/versions/` contiene la línea base `0001_initial_schema`, con las tablas `currencies` y `platform_dates`). Alembic toma la URL de la BD de la variable de entorno `DATABASE_URL` (la misma que usa la app; no se hardcodea en `alembic.ini`).
@@ -145,6 +151,29 @@ Las principales librerías utilizadas en este proyecto son:
    ```bash
    uvicorn api.main:app --reload
    ```
+
+### Despliegue con Docker
+
+El proyecto incluye un `Dockerfile` y un `docker-compose.yml` para levantar un entorno reproducible (API + PostgreSQL) sin instalar Python ni una base de datos en tu máquina.
+
+1. **Prepara las variables de entorno**:
+   ```bash
+   cp .env.example .env
+   ```
+   Rellena las URLs de los proveedores (`OFFICIAL_MARKET_DATA_PROVIDER_URL`, `MARKET_DATA_PROVIDER_*_URL`). **No** hace falta que ajustes `DATABASE_URL`: `docker-compose.yml` la sobreescribe para apuntar al servicio de base de datos que levanta él mismo (credenciales configurables con `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`).
+
+2. **Levanta la app y la base de datos**:
+   ```bash
+   docker compose up --build
+   ```
+   La API queda disponible en `http://localhost:8000` (Swagger en `/docs`, ReDoc en `/redoc`) y PostgreSQL en `localhost:5432`. Al arrancar, la app ejecuta `init_db()` (create_all idempotente) para garantizar las tablas; Alembic sigue siendo la fuente de verdad del esquema versionado (`alembic upgrade head`).
+
+3. **Solo la imagen de la app** (si ya tienes tu propia base de datos): construye y ejecuta el `Dockerfile` directamente, inyectando las variables de entorno con `--env-file`:
+   ```bash
+   docker build -t dolartracker .
+   docker run --env-file .env -p 8000:8000 dolartracker
+   ```
+   > En este modo, `DATABASE_URL` debe apuntar a una instancia de PostgreSQL accesible desde el contenedor.
 
 ### Despliegue en Vercel
 Este proyecto está configurado para Vercel. Solo necesitas conectar tu repositorio a Vercel y se detectará automáticamente el archivo `vercel.json` y la aplicación en `api/main.py`.
