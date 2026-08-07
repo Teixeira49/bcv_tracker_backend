@@ -4,6 +4,7 @@ from typing import List
 
 from api.core.config.config import Config as c
 from ..models.bd_currency import Base, Currency, PlatformDate
+from api.utils.constants.constants import Constants
 from api.utils.helpers.helper import Helper
 
 # Lee la URL de la base de datos desde las variables de entorno.
@@ -26,13 +27,32 @@ def init_db():
     """
     Base.metadata.create_all(bind=engine)
 
+def _variant_of(currency: Currency) -> str:
+    """Variante efectiva de una moneda entrante, con el centinela aplicado.
+
+    El default ``'na'`` de la columna solo se materializa al insertar, así que una
+    ``Currency`` construida sin variante la trae en ``None`` mientras vive en
+    memoria. Sin normalizar, esa moneda buscaría la clave ``(code, platform, None)``
+    y no encontraría su fila —guardada con ``'na'``—, intentaría insertar y
+    chocaría contra el UNIQUE. Se normaliza en un solo punto para que la búsqueda
+    y la inserción usen exactamente el mismo valor.
+    """
+    return currency.variant or Constants.VARIANT_NA
+
 def save_currencies_to_db(currencies: List[Currency]):
     """Persiste (upsert) una lista de monedas y calcula su variación (ROC).
 
-    Por cada moneda busca el registro existente con el mismo ``(code, platform)``:
-    si existe, lo actualiza y calcula el cambio porcentual respecto al valor
-    previo; si no, inserta un registro nuevo con ``change = 0.0``. Toda la
-    operación es transaccional (``commit`` al final, ``rollback`` ante error).
+    Por cada moneda busca el registro existente con la misma clave de negocio
+    ``(code, platform, variant)``: si existe, lo actualiza y calcula el cambio
+    porcentual respecto al valor previo; si no, inserta un registro nuevo con
+    ``change = 0.0``. Toda la operación es transaccional (``commit`` al final,
+    ``rollback`` ante error).
+
+    La variante forma parte de la clave desde #73. Antes la clave era solo
+    ``(code, platform)``, y como las fuentes que publican varias series por
+    moneda (compra/venta en los P2P, oficial/paralelo en DolarAPI) las envían en
+    el mismo lote, la segunda escritura pisaba a la primera: quedaba una sola
+    fila con el último valor y un ROC que era en realidad el spread entre series.
 
     :param currencies: monedas a guardar o actualizar.
     """
@@ -56,18 +76,18 @@ def save_currencies_to_db(currencies: List[Currency]):
                 .all()
             )
             for row in existing_rows:
-                key = (row.code, row.platform)
-                # Conserva la primera fila por clave (id más bajo), replicando el
-                # `.first()` (sin orden explícito) del acceso previo. Se guarda la
-                # entidad ORM, no solo el valor, para preservar la semántica del
-                # identity map cuando el lote trae varias monedas con el mismo
-                # (code, platform) (p. ej. Binance buy/sell).
+                key = (row.code, row.platform, row.variant)
+                # La clave incluye la variante, así que cada serie (compra, venta,
+                # oficial, ...) mapea a su propia fila y ya no compiten por una
+                # sola. El UNIQUE de la tabla hace que no pueda haber más de una
+                # fila por clave; el `if` se conserva como red defensiva y, si
+                # aun así hubiera duplicados, gana la de `id` más bajo.
                 if key not in existing_by_key:
                     existing_by_key[key] = row
 
         for cur in currencies:
-            # Registro existente con el mismo código y plataforma (precargado).
-            existing_row = existing_by_key.get((cur.code, cur.platform))
+            # Registro existente con la misma clave de negocio (precargado).
+            existing_row = existing_by_key.get((cur.code, cur.platform, _variant_of(cur)))
 
             # actualizar o crear el registro "todayData == True"
             if existing_row:
@@ -87,6 +107,7 @@ def save_currencies_to_db(currencies: List[Currency]):
                     code=cur.code,
                     name=cur.name,
                     platform=cur.platform,
+                    variant=_variant_of(cur),
                     value=cur.value,
                     change=cur.change,
                     createDate=now,
