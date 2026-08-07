@@ -4,8 +4,6 @@ import httpx
 import asyncio
 from typing import Optional, List
 
-from sqlalchemy import func
-
 from api.core.client.http_client import HttpClient
 from api.core.errors.exceptions import source_guard, SourceEmptyError, SourceParsingError
 from api.models.bd_currency import Currency
@@ -23,6 +21,12 @@ from api.services.dollar_endpoints import DollarEndpoints as endpoints
 
 # Código del dólar (USD) usado por los modos "solo-dólar".
 _USD_CODE = "USD"
+
+# Lado del libro P2P (``tradeType`` de Binance/Bybit/OKX/Bitget) -> variante con
+# la que se persiste esa serie. El acceso es directo (no ``.get`` con default) a
+# propósito: un lado desconocido debe fallar de forma visible, no caer en la
+# variante ``na`` y volver a colapsar compra y venta en la misma fila (#73).
+_VARIANT_BY_TRADE_TYPE = {"Buy": c.VARIANT_BUY, "Sell": c.VARIANT_SELL}
 
 logger = get_logger("services.dollar")
 
@@ -159,7 +163,8 @@ class DollarService:
                 asset,
                 "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
                 average,
-                c.BINANCE_NAME
+                c.BINANCE_NAME,
+                variant=_VARIANT_BY_TRADE_TYPE[tradeType]
             )
         
     async def getCurrenciesByBybit(self, client: httpx.AsyncClient, asset: str = "USDT", fiat: str = "VES", tradeType: str = "Buy"):
@@ -212,7 +217,8 @@ class DollarService:
                 asset,
                 "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
                 average,
-                c.BYBIT_NAME
+                c.BYBIT_NAME,
+                variant=_VARIANT_BY_TRADE_TYPE[tradeType]
             )
 
     async def get_raw_bybit_currencies(self) -> List[Currency]:
@@ -281,7 +287,8 @@ class DollarService:
                 asset,
                 "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
                 average,
-                c.OKX_NAME
+                c.OKX_NAME,
+                variant=_VARIANT_BY_TRADE_TYPE[tradeType]
             )
 
     async def get_raw_okx_currencies(self) -> List[Currency]:
@@ -346,7 +353,8 @@ class DollarService:
                 asset,
                 "{}-{}".format("Tether" if asset == "USDT" else "USD Coin", tradeType),
                 average,
-                c.BITGET_NAME
+                c.BITGET_NAME,
+                variant=_VARIANT_BY_TRADE_TYPE[tradeType]
             )
 
     async def _bitget_post_with_retry(self, dataPayload, headers, client):
@@ -415,7 +423,9 @@ class DollarService:
         averaged = []
         for code, values in groups.items():
             name = "Tether" if code == "USDT" else "USD Coin" if code == "USDC" else "Dolar" if code == "USD" else code
-            averaged.append(self.createCurrency(code, name, sum(values) / len(values), platform))
+            # El promedio es su propia serie: no es la compra ni la venta, así
+            # que se persiste aparte de ellas y no las sobreescribe.
+            averaged.append(self.createCurrency(code, name, sum(values) / len(values), platform, variant=c.VARIANT_AVERAGE))
         return averaged
 
     def _airtm_currencies_from_response(self, response) -> List[Currency]:
@@ -432,8 +442,8 @@ class DollarService:
         if buy is None or sell is None:
             raise SourceEmptyError(c.AIRTM_NAME)
         return [
-            self.createCurrency("USD", "Dolar-Buy", float(buy), c.AIRTM_NAME),
-            self.createCurrency("USD", "Dolar-Sell", float(sell), c.AIRTM_NAME),
+            self.createCurrency("USD", "Dolar-Buy", float(buy), c.AIRTM_NAME, variant=c.VARIANT_BUY),
+            self.createCurrency("USD", "Dolar-Sell", float(sell), c.AIRTM_NAME, variant=c.VARIANT_SELL),
         ]
 
     async def getCurrenciesByAirtm(self):
@@ -588,24 +598,26 @@ class DollarService:
             session.close()
 
     def _query_latest_rows(self, session, platforms=None, dollar_only=False):
-        """Consulta la **última fila por (code, platform)** aplicando los filtros en SQL.
+        """Consulta la fila viva de cada ``(code, platform, variant)``, filtrando en SQL.
 
-        Empuja a la consulta (issue #46): el filtro por plataforma, la estrategia
-        "último por ``(code, platform)``" (subconsulta ``max(id)`` agrupada, que
-        acota el resultado aunque la tabla crezca con histórico, ver #14) y el
-        filtro de solo-dólar. Así no se trae toda la tabla ni se filtra en Python.
+        Empuja a la consulta (issue #46) el filtro por plataforma y el de
+        solo-dólar, para no traer toda la tabla ni filtrar en Python.
+
+        Ya no hace falta la subconsulta ``max(id)`` que antes resolvía "la última
+        por ``(code, platform)``": desde #73 la identidad de negocio incluye la
+        variante y el ``UNIQUE (code, platform, variant)`` garantiza **una sola**
+        fila viva por clave. Aquella subconsulta, además, elegía el ``id`` más
+        alto mientras el upsert escribía en el más bajo, así que ante filas
+        gemelas devolvía justamente la que nadie estaba actualizando.
 
         :param session: sesión SQLAlchemy activa.
         :param platforms: lista de plataformas por las que filtrar (o ``None``).
         :param dollar_only: si ``True``, solo filas del dólar (``code == "USD"``).
-        :return: filas ``Currency`` (la última por code+platform).
+        :return: filas ``Currency`` (una por code+platform+variant).
         """
-        latest_ids = session.query(func.max(Currency.id))
+        query = session.query(Currency)
         if platforms:
-            latest_ids = latest_ids.filter(Currency.platform.in_(platforms))
-        latest_ids = latest_ids.group_by(Currency.code, Currency.platform)
-
-        query = session.query(Currency).filter(Currency.id.in_(latest_ids))
+            query = query.filter(Currency.platform.in_(platforms))
         if dollar_only:
             query = query.filter(Currency.code == _USD_CODE)
         return query.order_by(Currency.id.desc()).all()
@@ -797,8 +809,14 @@ class DollarService:
             if value is None:
                 continue
             name = entry.get("fuente") or entry.get("nombre") or "USD"
+            # DolarAPI publica varias fuentes (oficial, paralelo, ...) bajo el
+            # mismo `moneda` ("USD"), así que la fuente ES la variante: sin ella
+            # todas colapsarían en la misma fila. Se deriva del payload en vez de
+            # mapearla contra una lista cerrada, para que una fuente nueva de
+            # DolarAPI estrene su propia fila en lugar de pisar a otra.
+            variant = (entry.get("fuente") or c.EMPTY_STRING).strip().lower() or c.VARIANT_NA
             currencies.append(
-                self.createCurrency(entry.get("moneda") or "USD", name, float(value), c.DOLARAPI_NAME)
+                self.createCurrency(entry.get("moneda") or "USD", name, float(value), c.DOLARAPI_NAME, variant=variant)
             )
         if not currencies:
             raise SourceEmptyError(c.DOLARAPI_NAME)
@@ -865,28 +883,31 @@ class DollarService:
             try:
                 # Códigos y plataformas del lote en vivo. Se filtran ambos en
                 # SQL (una sola consulta, portable entre SQLite y PostgreSQL);
-                # el par exacto (code, platform) se resuelve luego con el dict.
+                # la clave exacta se resuelve luego con el dict.
                 codes = {cur.code for cur in currencies}
                 platforms = {cur.platform for cur in currencies}
                 rows = (
-                    session.query(Currency.code, Currency.platform, Currency.value)
+                    session.query(Currency.code, Currency.platform, Currency.variant, Currency.value)
                     .filter(Currency.code.in_(codes), Currency.platform.in_(platforms))
                     .order_by(Currency.id.asc())
                     .all()
                 )
-                # Mapa (code, platform) -> valor previo. Con orden ascendente por
-                # id, el más reciente prevalece si hubiera más de una fila.
-                previous_by_key = {(code, platform): value for code, platform, value in rows}
+                # Mapa (code, platform, variant) -> valor previo. La variante entra
+                # en la clave para que cada serie compare contra la suya: sin ella,
+                # la compra de un P2P calculaba su ROC contra la venta guardada.
+                previous_by_key = {
+                    (code, platform, variant): value for code, platform, variant, value in rows
+                }
 
                 for cur in currencies:
-                    previous = previous_by_key.get((cur.code, cur.platform))
+                    previous = previous_by_key.get((cur.code, cur.platform, cur.variant))
                     cur.change = self.helper.rate_of_change(previous, cur.value)
                 return currencies
             finally:
                 session.close()
         return await loop.run_in_executor(None, _calc)
 
-    def createCurrency(self, code: str = c.EMPTY_STRING, name: str = c.EMPTY_STRING, value:float = 0.0, platform: str = c.BCV_NAME, change: float = 0.0) -> Currency:
+    def createCurrency(self, code: str = c.EMPTY_STRING, name: str = c.EMPTY_STRING, value:float = 0.0, platform: str = c.BCV_NAME, change: float = 0.0, variant: str = c.VARIANT_NA) -> Currency:
         """Construye una entidad ``Currency`` normalizando sus campos de texto.
 
         Recorta el ``code``, capitaliza el ``name`` y sella las fechas de
@@ -898,6 +919,10 @@ class DollarService:
         :param value: valor de la tasa en VES.
         :param platform: plataforma de origen (por defecto el BCV).
         :param change: variación porcentual (ROC); ``0.0`` si no aplica.
+        :param variant: serie de la cotización dentro de ``(code, platform)``
+            (``buy``, ``sell``, ``average``, ``oficial``, ``paralelo``). El
+            default ``na`` corresponde a las fuentes que publican una sola serie
+            por moneda (BCV, Yadio, Exchange Monitor).
         :return: instancia ``Currency`` lista para serializar o persistir.
         """
         # Una única fuente de tiempo (self.helper), reutilizada para ambas
@@ -907,6 +932,7 @@ class DollarService:
             code=code.strip(),
             name=name.strip().capitalize(),
             platform=platform,
+            variant=variant,
             value=value,
             change=change,
             createDate=now,
