@@ -6,11 +6,5 @@
             "preview": true,
             "main": true
         }
-    },
-    "rewrites": [
-        {
-            "source": "/(.*)",
-            "destination": "/api/main.py"
-        }
-    ]
+    }
 }
