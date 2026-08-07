@@ -15,13 +15,18 @@ name: Scheduled Scrape
 
 on:
   schedule:
-    - cron: '0 4 * * *'    # 04:00 UTC = 00:00 Venezuela (UTC-4) → incluye BCV
+    - cron: '0 4 * * *'    # 04:00 UTC = 00:00 Venezuela (UTC-4) → incluye BCV (ver BCV_CRON)
     - cron: '0 7 * * *'    # 7:00 AM UTC
     - cron: '0 11 * * *'   # 11:00 AM UTC
     - cron: '45 14 * * *'  # 2:45 PM UTC
     - cron: '15 18 * * *'  # 6:15 PM UTC
     - cron: '0 23 * * *'   # 11:00 PM UTC
-  workflow_dispatch: {}    # permite ejecutar el scrape manualmente desde la UI
+  workflow_dispatch:       # permite ejecutar el scrape manualmente desde la UI
+    inputs:
+      include_bcv:
+        description: 'Incluir el BCV en esta corrida manual'
+        type: boolean
+        default: false
 
 env:
   BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
@@ -29,6 +34,14 @@ env:
   # exista; si está definida, se envía como Bearer. Así el cron queda listo para
   # autenticarse sin cambios cuando se proteja el endpoint.
   UPDATE_API_KEY: ${{ secrets.UPDATE_API_KEY }}
+  # Cron que dispara la corrida con BCV. Debe coincidir LITERALMENTE con una de
+  # las entradas de `on.schedule` (GitHub reporta el cron tal cual está escrito).
+  BCV_CRON: '0 4 * * *'
+  # Cron que realmente disparó esta corrida (vacío en ejecuciones manuales) y el
+  # input del disparo manual. Se leen por variable de entorno, no interpolando
+  # ${{ }} dentro del script, para no inyectar expresiones en el shell.
+  TRIGGERING_CRON: ${{ github.event.schedule }}
+  INCLUDE_BCV_INPUT: ${{ inputs.include_bcv }}
 
 jobs:
   trigger:
@@ -38,17 +51,27 @@ jobs:
         run: |
           set -euo pipefail
 
-          CURRENT_HOUR=$(date -u +%H)
-
           # Body por mercado (#71): P2P cripto con ambos lados (ambas), fiat y
           # agregadores con todas sus divisas (todas), y Exchange Monitor con su
           # valor propio + promedio (own+monitor).
           MARKETS='"yadio":"todas","binance":"ambas","bybit":"ambas","okx":"ambas","bitget":"ambas","airtm":"todas","dolarapi":"todas","exchange_monitor":"own+monitor"'
 
-          # BCV solo en la corrida de las 04:00 UTC = 00:00 (medianoche) en Venezuela.
-          if [ "$CURRENT_HOUR" = "04" ]; then
+          # El BCV se incluye según el cron que DISPARÓ la corrida, no según la
+          # hora a la que el runner arrancó.
+          #
+          # Antes esto se decidía con `date -u +%H` = "04". GitHub Actions encola
+          # los crons de repos gratuitos y los arranca con retrasos de 1 a 3 horas,
+          # así que esa comparación no se cumplía casi nunca: entre el 2026-07-24
+          # (cuando se movió el disparador a la hora 04) y el 2026-08-07, ninguna
+          # de las corridas llegó a incluir el BCV y sus tasas quedaron congeladas.
+          # `github.event.schedule` trae el cron literal que la disparó y es
+          # inmune al retraso.
+          if [ "$TRIGGERING_CRON" = "$BCV_CRON" ]; then
             MARKETS='"bcv":"todas",'"$MARKETS"
-            echo "🕛 Corrida de medianoche en Venezuela (04:00 UTC): incluyendo BCV."
+            echo "🕛 Corrida de medianoche en Venezuela ($BCV_CRON UTC): incluyendo BCV."
+          elif [ "$INCLUDE_BCV_INPUT" = "true" ]; then
+            MARKETS='"bcv":"todas",'"$MARKETS"
+            echo "🖐️ Corrida manual con include_bcv: incluyendo BCV."
           fi
 
           BODY="{\"markets\":{${MARKETS}}}"
