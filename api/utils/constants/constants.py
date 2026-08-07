@@ -32,7 +32,7 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
         "url": "https://github.com/Teixeira49",
     }
 
-    VERSION = "3.0.0"
+    VERSION = "3.1.0"
 
     # Prefijo de versión del contrato de la API (versionado por path). Es
     # independiente de VERSION (versión semántica de la app / metadata OpenAPI):
@@ -105,6 +105,34 @@ Esta API proporciona acceso en tiempo real a las tasas cambiarias de Venezuela, 
     SOURCE_PARSING_MSG = 'No se pudo interpretar la respuesta de la fuente: {source}.'
 
     SOURCE_EMPTY_MSG = 'La fuente {source} no devolvió ofertas disponibles.'
+
+    # --- Variante de la cotización (issue #73) --------------------------------
+    # Una misma moneda de una misma plataforma puede cotizar en varias series a
+    # la vez: los P2P publican compra y venta, y DolarAPI publica el oficial y el
+    # paralelo. Antes eso se codificaba dentro del ``name`` ("Tether-Buy"), que
+    # no formaba parte de la clave de negocio, así que las series se pisaban
+    # entre sí al persistir. La variante es ahora una columna propia y entra en
+    # la identidad de la fila: ``(code, platform, variant)``.
+    #
+    # ``VARIANT_NA`` es el valor por defecto (fuente de una sola serie por
+    # moneda: BCV, Yadio, Exchange Monitor). Es un centinela NO nulo a propósito:
+    # tanto PostgreSQL como SQLite tratan los NULL como distintos entre sí en un
+    # índice único, así que una columna nullable no impediría los duplicados.
+    VARIANT_NA = 'na'
+
+    VARIANT_BUY = 'buy'
+
+    VARIANT_SELL = 'sell'
+
+    # Serie promedio (modo ``average``): un solo valor por activo, distinto de
+    # las series de compra y venta que lo originan.
+    VARIANT_AVERAGE = 'average'
+
+    # Series de DolarAPI: no son lados de un libro, son dos mercados distintos
+    # publicados bajo el mismo código de moneda (USD).
+    VARIANT_OFICIAL = 'oficial'
+
+    VARIANT_PARALELO = 'paralelo'
 
     BCV_NAME = 'Banco Central de Venezuela'
     

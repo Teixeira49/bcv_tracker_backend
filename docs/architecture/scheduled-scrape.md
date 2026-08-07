@@ -34,7 +34,26 @@ Seis corridas diarias (UTC): `04:00, 07:00, 11:00, 14:45, 18:15, 23:00`. Las
 fuentes P2P/agregadores se refrescan en **todas**; el **BCV** solo se incluye en
 la corrida de las **04:00 UTC**, que equivale a la **medianoche (00:00) en
 Venezuela** (UTC-4). La cadencia es configurable editando la lista `schedule`
-del workflow. Además, `workflow_dispatch` permite corridas manuales.
+del workflow. Además, `workflow_dispatch` permite corridas manuales, con un input
+`include_bcv` para forzar la inclusión del BCV fuera de su horario.
+
+### Cómo se decide incluir el BCV
+
+Por el **cron que disparó** la corrida (`github.event.schedule`, comparado contra
+la variable `BCV_CRON` del workflow), **no** por la hora del reloj al arrancar.
+
+Es una distinción con historia: hasta el 2026-08-07 la condición era
+`date -u +%H` = `"04"`. GitHub Actions encola los crons de los repos gratuitos y
+los arranca con retrasos de **1 a 3 horas** —el cron de las 04:00 UTC llegó a
+arrancar a las 06:34, el de las 11:00 a las 12:55— así que la comparación casi
+nunca se cumplía. Resultado: entre el 2026-07-24 (cuando el disparador se movió a
+la hora `04`) y el 2026-08-07, **ninguna** corrida incluyó el BCV y sus tasas
+quedaron congeladas. `github.event.schedule` es inmune al retraso porque trae el
+cron literal que originó la ejecución.
+
+> Al editar la lista `schedule`, mantén `BCV_CRON` idéntico —carácter por
+> carácter— a la entrada que debe traer el BCV: GitHub reporta el cron tal cual
+> está escrito en el YAML.
 
 ## Autenticación (#13)
 

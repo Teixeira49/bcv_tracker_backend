@@ -13,6 +13,11 @@ class CurrencySchema(BaseModel):
     code: str
     name: str
     platform: str
+    # Serie de la cotización dentro de (code, platform): "buy"/"sell" en los P2P
+    # y Airtm, "oficial"/"paralelo" en DolarAPI, "average" en los modos promedio,
+    # y "na" en las fuentes de una sola serie por moneda (issue #73). Es opcional
+    # en el schema para no romper a los clientes que aún no lo leen.
+    variant: Optional[str] = None
     value: float
     change: float
     createDate: Optional[str] = None

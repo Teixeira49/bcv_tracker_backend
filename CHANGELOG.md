@@ -5,6 +5,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y el proyecto sigue [Semantic Versioning](https://semver.org/lang/es/).
 
+## [3.1.0] - 2026-08-07
+
+_The Data Integrity Update. Detalle completo en [`docs/release/RELEASE_v3.1.0.md`](docs/release/RELEASE_v3.1.0.md)._
+
+### Added
+- Columna **`variant`** en `currencies` (NOT NULL, centinela `'na'`): identifica la serie de una cotización dentro de `(code, platform)` — `buy`/`sell` en los P2P y Airtm, `oficial`/`paralelo` en DolarAPI, `average` en los modos promedio (#73).
+- Constraint `UNIQUE (code, platform, variant)` y migración `0002_add_currency_variant` con backfill de datos que **reutiliza** las filas huérfanas como la serie que faltaba, sin borrar ninguna (#73).
+- Input `include_bcv` en el `workflow_dispatch` del cron, para refrescar el BCV fuera de su horario.
+- `CurrencySchema` expone `variant` como campo opcional.
+
+### Changed
+- La **clave de negocio** de una cotización pasa de `(code, platform)` a `(code, platform, variant)`: el upsert, la lectura de BD y el cálculo de ROC en vivo cruzan por las tres columnas (#73).
+- `_query_latest_rows` deja de usar la subconsulta `max(id)`, obsoleta con el `UNIQUE` nuevo.
+
+### Fixed
+- Las fuentes que publican varias series por moneda ya no se pisan entre sí al persistir: el lado de **compra** de Binance, Bybit, OKX, Bitget y Airtm, y el dólar **oficial** de DolarAPI, vuelven a tener fila propia. Antes solo sobrevivía la última serie escrita del lote (#73).
+- La API dejaba de servir el dato fresco: el upsert escribía en la fila de `id` más bajo mientras la lectura devolvía `max(id)`, así que ante filas gemelas se servía la que nadie actualizaba —congelada desde julio en 12 de las 20 monedas (#73).
+- El `change` de las fuentes con dos lados era el spread compra/venta en vez de la variación contra la corrida anterior (#73).
+- El cron nunca incluía el BCV: decidía con `date -u +%H` = `"04"`, la hora real de arranque, y GitHub Actions retrasa los crons de 1 a 3 horas. Ahora se compara `github.event.schedule`, el cron literal que disparó la corrida.
+
 ## [3.0.0] - 2026-07-26
 
 _The Contract & Performance Update. Detalle completo en [`docs/release/RELEASE_v3.0.0.md`](docs/release/RELEASE_v3.0.0.md)._
@@ -155,6 +175,7 @@ _The Professionalization Update. Detalle completo en [`docs/release/RELEASE_v1.1
 - Manejo de errores en la importación del router.
 - Simplificación de la lógica de comparación de fechas.
 
+[3.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/Teixeira49/bcv_tracker_backend/compare/v2.0.0...v2.1.0
